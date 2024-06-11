@@ -15,7 +15,7 @@
 //!   -
 //!
 //! **REVISION:**
-//!   * 0.0.1 - Initial release. 2024-05-30
+//!   * 0.0.1 - Initial release. 2024-06-11
 //!
 //!
 //! *Library compliance:*
@@ -34,57 +34,82 @@
 //! without doing anything else.
 
 module riscv_dm #(
-    parameter int PROGRAM_SIZE          = 4,                //! program buffer size, in words
-    parameter int DATA_SIZE             = 4,                //! data buffer size, in words
-    parameter int WORD_SIZE             = 4,                //! word size, in bytes
-    localparam integer BYTE_SEL_BITS = $clog2(WORD_SIZE),
-    localparam integer MEMORY_SEL_BITS = $clog2(PROGRAM_SIZE + DATA_SIZE),
-    localparam int BPW = WORD_SIZE,
-    localparam int ADDR_WIDTH = MEMORY_SEL_BITS + BYTE_SEL_BITS,
-    localparam int DATA_WIDTH = BPW * 8
-) (
-    input  logic           clk_i,  //! System clock signal.
-    input  logic           rstn_i, //! System reset signal (active low)
+    parameter  integer NUM_HARTS        = 1,                //! Number of harts connected to the Debug Module
+    parameter  integer PROGRAM_SIZE     = 4,                //! program buffer size, in words
+    parameter  integer DATA_SIZE        = 4,                //! data buffer size, in words
+    parameter  integer WORD_SIZE        = 4,                //! word size, in bytes
+    parameter  integer NUM_PHYS_REGS    = 64,               //! Maximum number of physical registers for all the cores
 
+    localparam integer XLEN             = 64,
+    localparam integer PHYS_REG_BITS    = $clog2(NUM_PHYS_REGS),
+    localparam integer NUM_LOGI_REGS    = 32,
+    localparam integer LOGI_REG_BITS    = $clog2(NUM_LOGI_REGS),
+    localparam integer BYTE_SEL_BITS    = $clog2(WORD_SIZE),
+    localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE),
+    localparam integer BPW              = WORD_SIZE,
+    localparam integer ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
+    localparam integer DATA_WIDTH       = BPW * 8
+) (
+    input   logic                                       clk_i,      //! Clock signal
+    input   logic                                       rstn_i,     //! Reset signal (active low)
+
+
+    // DTM interface
+    //! @virtualbus dmi @dir in
     input   logic                                       req_valid_i,
     output  logic                                       req_ready_o,
     input   logic [riscv_dm_pkg::DMI_ADDR_WIDTH-1:0]    req_addr_i,
     input   logic [riscv_dm_pkg::DMI_DATA_WIDTH-1:0]    req_data_i,
-    input   logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]      req_op_i,
+    input   logic [riscv_dm_pkPHYS_REG_BITSg::DMI_OP_WIDTH-1:0]      req_op_i,
 
     output  logic                                       resp_valid_o,
     input   logic                                       resp_ready_i,
     output  logic [riscv_dm_pkg::DMI_DATA_WIDTH-1:0]    resp_data_o,
     output  logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]      resp_op_o,
+    //! @end
 
     // Hart run control signals
-    output logic [NUM_HARTS-1:0] resume_request_o,
-    input logic [NUM_HARTS-1:0] resume_ack_i,
-    input logic [NUM_HARTS-1:0] running_i,
+    output logic [NUM_HARTS-1:0]                        resume_request_o,
+    input logic [NUM_HARTS-1:0]                         resume_ack_i,
+    input logic [NUM_HARTS-1:0]                         running_i,
 
-    output logic [NUM_HARTS-1:0] halt_request_o,
-    input logic [NUM_HARTS-1:0] halted_i,
+    output logic [NUM_HARTS-1:0]                        halt_request_o,
+    input logic [NUM_HARTS-1:0]                         halted_i,
 
-    output logic [NUM_HARTS-1:0] halt_on_reset_o,
-    output logic [NUM_HARTS-1:0] hart_reset_o,
-    input logic [NUM_HARTS-1:0] havereset_i,
+    output logic [NUM_HARTS-1:0]                        halt_on_reset_o,
+    output logic [NUM_HARTS-1:0]                        hart_reset_o,
+    input logic [NUM_HARTS-1:0]                         havereset_i,
 
-    input logic [NUM_HARTS-1:0] unavail_i,
+    input logic [NUM_HARTS-1:0]                         unavail_i,
+
+    // Register read abstract command signals
+    //! @virtualbus regfilebus @dir in
+    output logic                        rename_read_en_o,   //! Request reading the rename table
+    output logic [PHYS_REG_BITS-1:0]    rename_read_reg_o,  //! Logical register for which the mapping is read
+    input  logic [LOGI_REG_BITS-1:0]    rename_read_resp_i, //! Physical register mapped to the requested logical register
+
+    output logic                        rf_en_o,            //! Read enable for the register file
+    output logic                        rf_preg_o,          //! Target physical register in the register file
+    input  logic [XLEN-1:0]             rf_rdata_i,         //! Data read from the register file
+
+    output logic                        rf_we_o,            //! Write enable for the register file
+    input  logic [XLEN-1:0]             rf_wdata_o,         //! Data to write to the register file
+
+    input  logic [XLEN-1:0]             rf_read_data_i,
+    //! @end
 
 
     // SRI interface for program buffer
-    input  logic [ADDR_WIDTH-1:0] sri_addr_i,               //! register interface address
-    input  logic                  sri_en_i,                 //! register interface enable
-    input  logic [DATA_WIDTH-1:0] sri_wdata_i,              //! register interface data to write
-    input  logic                  sri_we_i,                 //! register interface write enable
-    input  logic [BPW-1:0]        sri_be_i,                 //! register interface byte enable (write mask)
-    output logic [DATA_WIDTH-1:0] sri_rdata_o,              //! register interface read data
-    output logic                  sri_error_o               //! register interface error
+    //! @virtualbus sri @dir in
+    input  logic [ADDR_WIDTH-1:0]                       sri_addr_i,     //! register interface address
+    input  logic                                        sri_en_i,       //! register interface enable
+    input  logic [DATA_WIDTH-1:0]                       sri_wdata_i,    //! register interface data to write
+    input  logic                                        sri_we_i,       //! register interface write enable
+    input  logic [BPW-1:0]                              sri_be_i,       //! register interface byte enable
+    output logic [DATA_WIDTH-1:0]                       sri_rdata_o,    //! register interface read data
+    output logic                                        sri_error_o     //! register interface error
+    //! @end
 );
-
-localparam integer NUM_HARTS = 1;
-
-// CDC fifos O_o
 
 
 typedef enum logic [3:0] {
@@ -94,7 +119,8 @@ typedef enum logic [3:0] {
     WRITE,
     ABSTRACT_CMD_REG_READ_RENAME,
     ABSTRACT_CMD_REG_READ_DATA,
-    EXEC_PROGBUF
+    EXEC_PROGBUF_WAIT_COMPLETION,
+    EXEC_PROGBUF_WAIT_EBREAK
 } dm_state_t;
 
 dm_state_t  dm_state,
@@ -210,6 +236,12 @@ assign command_i = req_data_i;
 
 logic postexec, postexec_next;
 
+// ===== program buffer register =====
+logic prog_data_buf_we;
+logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf;
+
+logic abstract_cmd;
+
 always_comb begin
     // hawindowsel_next = hawindowsel;
     // hawindow_next = hawindow;
@@ -221,6 +253,8 @@ always_comb begin
     resp_valid_o = 0;
     resp_op_o = 0; // err
     clear_ackhavereset = 0;
+    prog_data_buf_we = 0;
+    dm_state_op_next = IDLE;
 
     case (dm_state)
         IDLE: begin
@@ -241,7 +275,6 @@ always_comb begin
         end
         READ: begin
             resp_data_o = 32'hcafebabe;
-            dm_state_op_next = IDLE;
             case (req_addr_i) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     resp_data_o = dmcontrol;
@@ -281,12 +314,12 @@ always_comb begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA11]: begin
+                [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA0+DATA_SIZE-1]: begin
                     resp_data_o = 32'haaaa5555;
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF15]: begin
+                [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF0+PROGRAM_SIZE-1]: begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
@@ -302,7 +335,7 @@ always_comb begin
             endcase
 
             if (resp_ready_i)
-                dm_state_next = dm_state_op_next;
+                dm_state_next = IDLE;
         end
         WRITE: begin
             req_ready_o = 0;
@@ -360,7 +393,7 @@ always_comb begin
                     if (abstractcs.cmderr == 3'b0) begin
                         if (command_i.cmdtype == 0) begin
                             if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
-                                dm_state_op_next = ABSTRACT_CMD_REG_READ_RENAME;
+                                abstract_cmd = 1'b1;
                                 if (command_i.control.postexec) begin
                                     postexec_next = 1'b1;
                                 end
@@ -389,11 +422,13 @@ always_comb begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA11]: begin //TODO: create registers
+                [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA11]: begin
+                    prog_data_buf_we = 1;
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF15]: begin //TODO: create registers
+                [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF15]: begin
+                    prog_data_buf_we = 1;
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
@@ -406,38 +441,58 @@ always_comb begin
                     resp_valid_o = 1;
                 end
             endcase
-            if (resp_ready_i)
-                dm_state_next = dm_state_op_next;
+
+            if (resp_ready_i && ~abstract_cmd) begin
+                dm_state_next = IDLE;
+            end else if (resp_ready_i && abstract_cmd) begin
+                if (postexec) begin
+                    postexec_next = 0;
+                    progbuf_run_req_o[hartsel] = 1'b1;
+                    postexec_next = 1'b0;
+                    dm_state_next = EXEC_PROGBUF_WAIT_COMPLETION;
+                end else begin
+                    dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                end
+            end
         end
         ABSTRACT_CMD_REG_READ_RENAME: begin
+            // asserts signals for reading rename table
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
         ABSTRACT_CMD_REG_READ_DATA: begin
+            // asserts signals for reading physical RF
             resp_data_o = 32'd0;
-            if (postexec) begin
-                postexec_next = 1'b0;
-                dm_state_next = EXEC_PROGBUF;
-            end else begin
+            resp_op_o = 0;
+            resp_valid_o = 1;
+            dm_state_next = IDLE;
+        end
+        EXEC_PROGBUF_WAIT_START: begin  // wait for the core to receive the request of executing the program buffer
+            if (progbuf_run_ack_i[hartsel]) begin
+                progbuf_run_req_o[hartsel] = 1'b0;
+                dm_state_next = EXEC_PROGBUF_WAIT_EBREAK;
+            end
+        end
+        EXEC_PROGBUF_WAIT_EBREAK: begin // wait for the core to finish executing the program buffer and run ebreak
+            if (halted_i[hartsel]) begin
                 resp_op_o = 0;
                 resp_valid_o = 1;
                 dm_state_next = IDLE;
             end
-        end
-        EXEC_PROGBUF: begin
-            resp_data_o = 32'ha5a5a5a5;
-            resp_op_o = 0;
-            resp_valid_o = 1;
-            dm_state_next = IDLE;
         end
         default:;
     endcase
 end
 
 
+
+
 always_ff @( posedge clk_i ) begin
     if (~rstn_i) begin
         dmcontrol <= 0;
         dm_state <= IDLE;
+
+        postexec <= 0;
+
         // TODO: actual reset values
         hartsel <= hartsel_next;
         abstractcs.cmderr <= 3'b0;
@@ -446,6 +501,8 @@ always_ff @( posedge clk_i ) begin
     end else begin
         dmcontrol <= dmcontrol_next;
         dm_state <= dm_state_next;
+
+        postexec <= postexec_next;
 
         // handle dmcontrol updates
         hartsel <= hartsel_next;
@@ -458,6 +515,10 @@ always_ff @( posedge clk_i ) begin
         // handle dmcontrol clear
         ackhavereset <= ackhavereset_next & ~clear_ackhavereset;
         ackunavail <= ackunavail_next & ~clear_ackunavail;
+
+        if (prog_data_buf_we) begin
+            prog_data_buf[req_addr_i[4:0]] <= req_data_i;
+        end
     end
 end
 
@@ -473,44 +534,21 @@ localparam DATABUF_END =  DATABUF_BEGIN + DATA_SIZE - 1;
 logic [MEMORY_SEL_BITS-1:0] buf_addr;
 assign buf_addr = sri_addr_i[MEMORY_SEL_BITS+:BYTE_SEL_BITS];
 
-logic [WORD_SIZE*8-1:0][PROGRAM_SIZE-1:0] progbuf;
-logic [WORD_SIZE*8-1:0][DATA_SIZE-1:0] databuf;
+assign sri_rdata_o = sri_en_i ? prog_data_buf[buf_addr] : '0;
 
-always_comb begin
-    sri_rdata_o = '0;
-    case (buf_addr) inside
-        [PROGBUF_BEGIN:PROGBUF_END]: begin
-            if (sri_en_i) begin
-                sri_rdata_o = progbuf[buf_addr];
-            end
-        end
-        [DATABUF_BEGIN:DATABUF_END]: begin
-            if (sri_en_i) begin
-                sri_rdata_o = databuf[buf_addr];
-            end
-        end
-    endcase
-end
-
+generate
 always_ff @(posedge clk_i or negedge rstn_i) begin
     if (~rstn_i) begin
-        progbuf <= '0;
-        databuf <= '0;
+        prog_data_buf <= '0;
     end else begin
-        case (buf_addr) inside
-            [PROGBUF_BEGIN:PROGBUF_END]: begin
-                if (sri_we_i & sri_en_i) begin
-                    progbuf <= sri_wdata_i;
-                end
+        if (sri_we_i & sri_en_i) begin
+            for (integer i = 0; i < BPW; i++) begin
+                prog_data_buf[i*8+:8] <= sri_wdata_i[i*8+:8];
             end
-            [DATABUF_BEGIN:DATABUF_END]: begin
-                if (sri_we_i & sri_en_i) begin
-                    databuf <= sri_wdata_i;
-                end
-            end
-        endcase
+        end
     end
 end
+endgenerate
 
 endmodule
 
