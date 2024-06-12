@@ -239,6 +239,7 @@ assign abstractcs_next.datacount = 4'(DATA_SIZE);
 riscv_dm_pkg::command_t  command_i, command, command_next;
 
 assign command_i = req_data_i;
+assign rnm_read_reg_o = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
 
 logic postexec, postexec_next;
 
@@ -265,7 +266,6 @@ always_comb begin
 
     // rnm defaults
     rnm_read_en_o = 1'b0;
-    rnm_read_reg_o = '0;
 
     // rf defaults
     rf_en_o = 1'b0;
@@ -480,7 +480,6 @@ always_comb begin
         ABSTRACT_CMD_REG_READ_RENAME: begin
             // asserts signals for reading rename table
             rnm_read_en_o = 1'b1;
-            rnm_read_reg_o = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
             rf_logi_phys_mapping_next = rnm_read_resp_i;
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
