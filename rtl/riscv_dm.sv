@@ -164,14 +164,6 @@ assign hartinfo.datasize = 4'(DATA_SIZE);
 assign hartinfo.dataaddr = 12'h0;
 
 
-// ===== dmcontrol register =====
-
-riscv_dm_pkg::dmcontrol_t   dmcontrol,
-                            dmcontrol_next,
-                            dmcontrol_i;
-
-assign dmcontrol_i = req_data_i;
-
 // write only regs
 assign dmcontrol_next.resumereq = 0;
 assign dmcontrol_next.ackhavereset = 0;
@@ -221,12 +213,22 @@ assign dmstatus.version = 4'd3;
 
 
 
-// ===== abstractcs register =====
-riscv_dm_pkg::abstractcs_t  abstractcs,
-                            abstractcs_next,
-                            abstractcs_i;
+// ===== DM registers =====
+riscv_dm_pkg::dmcontrol_t   dmcontrol_i,
+                            dmcontrol,
+                            dmcontrol_next;
+
+riscv_dm_pkg::abstractcs_t  abstractcs_i,
+                            abstractcs,
+                            abstractcs_next;
+riscv_dm_pkg::command_t     command_i,
+                            command,
+                            command_next;
 
 assign abstractcs_i = req_data_i;
+assign command_i    = req_data_i;
+assign dmcontrol_i  = req_data_i;
+
 
 // read only regs
 assign abstractcs_next.progbufsize = 5'(PROGRAM_SIZE);
@@ -234,10 +236,7 @@ assign abstractcs_next.busy = 0;
 assign abstractcs_next.relaxedpriv = 1;
 assign abstractcs_next.datacount = 4'(DATA_SIZE);
 
-// ===== abstract command register =====
-riscv_dm_pkg::command_t  command_i, command, command_next;
 
-assign command_i = req_data_i;
 assign rnm_read_reg_o = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
 
 logic postexec, postexec_next;
