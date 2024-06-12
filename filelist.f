@@ -10,10 +10,9 @@
 
 ./SimJTAG/SimJTAG.cc
 ./SimJTAG/remote_bitbang.cc
-./SimJTAG/SimJTAG.v
+./SimJTAG/SimJTAG.sv
 
 ./rtl/riscv_dm_pkg.sv
 ./rtl/jtag_tap.sv
 ./rtl/riscv_dm.sv
 ./rtl/riscv_dtm.sv
-./tb_top.sv

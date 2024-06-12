@@ -64,6 +64,8 @@ logic dtmcs_select, dmi_select;
 
 riscv_dm_pkg::dmi_t dmi_in, dmi_latched;
 
+logic dmi_tdi, dtmcs_tdi;
+
 logic [riscv_dm_pkg::DMI_ADDR_WIDTH-1:0]  dmi_addr_in;
 logic [riscv_dm_pkg::DMI_DATA_WIDTH-1:0]  dmi_data_in;
 logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]    dmi_op_in;
@@ -95,8 +97,6 @@ jtag_tap jtag_tap_inst(
     .dmi_tdi_i(dmi_tdi),
     .dtmcs_tdi_i(dtmcs_tdi)
 );
-
-logic dmi_tdi, dtmcs_tdi;
 
 
 // dmi JTAG reg handling

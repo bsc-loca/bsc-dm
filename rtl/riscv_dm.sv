@@ -164,18 +164,6 @@ assign hartinfo.datasize = 4'(DATA_SIZE);
 assign hartinfo.dataaddr = 12'h0;
 
 
-// write only regs
-assign dmcontrol_next.resumereq = 0;
-assign dmcontrol_next.ackhavereset = 0;
-assign dmcontrol_next.ackunavail = 0;
-assign dmcontrol_next.hartselhi = 0;
-assign dmcontrol_next.hartsello = 0;
-assign dmcontrol_next.setkeepalive = 0;
-assign dmcontrol_next.clrkeepalive = 0;
-assign dmcontrol_next.setresethaltreq = 0;
-assign dmcontrol_next.clrresethaltreq = 0;
-
-
 // ===== dmstatus register =====
 riscv_dm_pkg::dmstatus_t dmstatus;
 
@@ -251,6 +239,15 @@ logic [XLEN-1:0] rf_logi_phys_mapping, rf_logi_phys_mapping_next;
 always_comb begin
     hartsel_next = hartsel;
     dmcontrol_next = dmcontrol;
+    dmcontrol_next.resumereq = 0;
+    dmcontrol_next.ackhavereset = 0;
+    dmcontrol_next.ackunavail = 0;
+    dmcontrol_next.hartselhi = 0;
+    dmcontrol_next.hartsello = 0;
+    dmcontrol_next.setkeepalive = 0;
+    dmcontrol_next.clrkeepalive = 0;
+    dmcontrol_next.setresethaltreq = 0;
+    dmcontrol_next.clrresethaltreq = 0;
     abstractcs_next.cmderr = abstractcs.cmderr;
     postexec_next = postexec;
     req_ready_o = 1;
