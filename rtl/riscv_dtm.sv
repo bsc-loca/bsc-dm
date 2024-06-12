@@ -120,11 +120,15 @@ always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
     end else begin
         if (tck_i & shift_dmi) begin
             dmi_reg <= {tdo, dmi_reg[riscv_dm_pkg::DMI_WIDTH-1:1]};
-         end else if (tck_i & input_dmi) begin
+         end else if (~tck_i & input_dmi) begin
             dmi_in <= dmi_reg;
-        end else if (~tck_i & output_dmi) begin             // latching occurs in falling edge
-            dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                   <= dmi_op_out;
-            dmi_reg[riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:2]    <= dmi_data_out;
+        end else if (tck_i & output_dmi) begin             // latching occurs in falling edge
+            if (dmi_state != DMI_IDLE) begin
+                dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= riscv_dm_pkg::RD_OP_BUSY;
+            end else begin
+                dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= dmi_op_out_next;
+            end
+            dmi_reg[riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:2] <= dmi_data_out;
         end else begin
             dmi_reg <= dmi_reg;
         end
@@ -143,7 +147,7 @@ typedef enum logic [1:0] {
 
 dmi_state_t dmi_state, dmi_state_next;
 
-always_ff @( posedge tck_i or posedge trst_i) begin
+always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
     if(trst_i | dtmcs_hard_reset) begin
         dmi_state <= DMI_IDLE;
         dmi_op_out <= 0;
@@ -175,7 +179,7 @@ always_comb begin
 
     case (dmi_state)
         DMI_IDLE: begin
-            if (input_dmi) begin
+            if (input_dmi & ~dmi_op_out[1]) begin
                 dmi_state_next = DMI_EXEC;
             end
         end
@@ -183,7 +187,7 @@ always_comb begin
             req_valid_o = 1'b1;
             resp_ready_o = 0;
 
-            if (input_dmi) begin
+            if (output_dmi) begin
                 dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
             end
 
@@ -194,12 +198,15 @@ always_comb begin
         DMI_EXEC_WAIT: begin
             resp_ready_o = 0;
 
-            dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
+            if (output_dmi) begin
+                dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
+            end
 
             // wait readback from JTAG
             if (resp_valid_i) begin
                 dmi_data_out_next = resp_data_i;
-                dmi_op_out_next = resp_op_i;
+                if (~dmi_op_out[1]) // only update op if previous value is not sticky
+                    dmi_op_out_next = resp_op_i;
                 dmi_state_next = DMI_READBACK_WAIT;
             end
         end
@@ -228,15 +235,15 @@ assign input_dtmcs = dtmcs_select & update_dr;
 assign output_dtmcs = dtmcs_select & capture_dr;
 
 assign dtmcs_tdi = dtmcs_reg[0];
-always_ff @( posedge tck_i  or posedge trst_i) begin
+always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
     if (trst_i) begin
-        dtmcs_reg <= dtmcs_read;
+        dtmcs_reg <= 32'd0;
     end else begin
-        if (shift_dtmcs) begin
+        if (tck_i & shift_dtmcs) begin
             dtmcs_reg <= {tdo, dtmcs_reg[riscv_dm_pkg::DTMCS_WIDTH-1:1]};
-        end else if (input_dtmcs) begin
+        end else if (~tck_i & input_dtmcs) begin
             // nada por ahora
-        end else if (output_dtmcs) begin
+        end else if (tck_i & output_dtmcs) begin
             dtmcs_reg <= dtmcs_read;
         end
     end
