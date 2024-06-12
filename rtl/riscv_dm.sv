@@ -89,11 +89,11 @@ module riscv_dm #(
     // Register read abstract command signals
     //! @virtualbus regfilebus @dir in
     output logic                        rnm_read_en_o,   //! Request reading the rename table
-    output logic [PHYS_REG_BITS-1:0]    rnm_read_reg_o,  //! Logical register for which the mapping is read
-    input  logic [LOGI_REG_BITS-1:0]    rnm_read_resp_i, //! Physical register mapped to the requested logical register
+    output logic [LOGI_REG_BITS-1:0]    rnm_read_reg_o,  //! Logical register for which the mapping is read
+    input  logic [PHYS_REG_BITS-1:0]    rnm_read_resp_i, //! Physical register mapped to the requested logical register
 
     output logic                        rf_en_o,            //! Read enable for the register file
-    output logic                        rf_preg_o,          //! Target physical register in the register file
+    output logic [PHYS_REG_BITS-1:0]    rf_preg_o,          //! Target physical register in the register file
     input  logic [XLEN-1:0]             rf_rdata_i,         //! Data read from the register file
 
     output logic                        rf_we_o,            //! Write enable for the register file
@@ -234,7 +234,6 @@ logic prog_data_buf_we;
 logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf_next;
 
 logic abstract_cmd;
-logic [XLEN-1:0] rf_logi_phys_mapping, rf_logi_phys_mapping_next;
 
 always_comb begin
     hartsel_next = hartsel;
@@ -475,13 +474,13 @@ always_comb begin
         ABSTRACT_CMD_REG_READ_RENAME: begin
             // asserts signals for reading rename table
             rnm_read_en_o = 1'b1;
-            rf_logi_phys_mapping_next = rnm_read_resp_i;
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
         ABSTRACT_CMD_REG_READ_DATA: begin
             resp_op_o = 0;
+            rnm_read_en_o = 1'b1;
 
-            rf_preg_o = rf_logi_phys_mapping;
+            rf_preg_o = rnm_read_resp_i;
             rf_en_o = 1'b1;
             // asserts signals for reading physical RF
             if (~command.control.write & command.control.transfer) begin // copy data from core register to data
