@@ -44,6 +44,7 @@ module riscv_dm #(
     localparam integer PHYS_REG_BITS    = $clog2(NUM_PHYS_REGS),
     localparam integer NUM_LOGI_REGS    = 32,
     localparam integer LOGI_REG_BITS    = $clog2(NUM_LOGI_REGS),
+
     localparam integer BYTE_SEL_BITS    = $clog2(WORD_SIZE),
     localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE),
     localparam integer BPW              = WORD_SIZE,
@@ -60,7 +61,7 @@ module riscv_dm #(
     output  logic                                       req_ready_o,
     input   logic [riscv_dm_pkg::DMI_ADDR_WIDTH-1:0]    req_addr_i,
     input   logic [riscv_dm_pkg::DMI_DATA_WIDTH-1:0]    req_data_i,
-    input   logic [riscv_dm_pkPHYS_REG_BITSg::DMI_OP_WIDTH-1:0]      req_op_i,
+    input   logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]      req_op_i,
 
     output  logic                                       resp_valid_o,
     input   logic                                       resp_ready_i,
@@ -76,6 +77,10 @@ module riscv_dm #(
     output logic [NUM_HARTS-1:0]                        halt_request_o,
     input logic [NUM_HARTS-1:0]                         halted_i,
 
+    output logic [NUM_HARTS-1:0]                        progbuf_run_req_o,
+    input logic [NUM_HARTS-1:0]                         progbuf_run_ack_i,
+    input logic [NUM_HARTS-1:0]                         parked_i,
+
     output logic [NUM_HARTS-1:0]                        halt_on_reset_o,
     output logic [NUM_HARTS-1:0]                        hart_reset_o,
     input logic [NUM_HARTS-1:0]                         havereset_i,
@@ -84,18 +89,16 @@ module riscv_dm #(
 
     // Register read abstract command signals
     //! @virtualbus regfilebus @dir in
-    output logic                        rename_read_en_o,   //! Request reading the rename table
-    output logic [PHYS_REG_BITS-1:0]    rename_read_reg_o,  //! Logical register for which the mapping is read
-    input  logic [LOGI_REG_BITS-1:0]    rename_read_resp_i, //! Physical register mapped to the requested logical register
+    output logic                        rnm_read_en_o,   //! Request reading the rename table
+    output logic [PHYS_REG_BITS-1:0]    rnm_read_reg_o,  //! Logical register for which the mapping is read
+    input  logic [LOGI_REG_BITS-1:0]    rnm_read_resp_i, //! Physical register mapped to the requested logical register
 
     output logic                        rf_en_o,            //! Read enable for the register file
     output logic                        rf_preg_o,          //! Target physical register in the register file
     input  logic [XLEN-1:0]             rf_rdata_i,         //! Data read from the register file
 
     output logic                        rf_we_o,            //! Write enable for the register file
-    input  logic [XLEN-1:0]             rf_wdata_o,         //! Data to write to the register file
-
-    input  logic [XLEN-1:0]             rf_read_data_i,
+    output  logic [XLEN-1:0]            rf_wdata_o,         //! Data to write to the register file
     //! @end
 
 
@@ -112,6 +115,12 @@ module riscv_dm #(
 );
 
 
+localparam PROGBUF_BEGIN = 0;
+localparam PROGBUF_END = PROGRAM_SIZE - 1;
+localparam DATABUF_BEGIN = PROGRAM_SIZE;
+localparam DATABUF_END =  DATABUF_BEGIN + DATA_SIZE - 1;
+
+
 typedef enum logic [3:0] {
     IDLE,
     NOP,
@@ -119,7 +128,7 @@ typedef enum logic [3:0] {
     WRITE,
     ABSTRACT_CMD_REG_READ_RENAME,
     ABSTRACT_CMD_REG_READ_DATA,
-    EXEC_PROGBUF_WAIT_COMPLETION,
+    EXEC_PROGBUF_WAIT_START,
     EXEC_PROGBUF_WAIT_EBREAK
 } dm_state_t;
 
@@ -149,14 +158,11 @@ assign resume_request_o = resumereqs;
 // ===== hartinfo register =====
 
 riscv_dm_pkg::hartinfo_t    hartinfo;
-// riscv_dm_pkg::dmcs2_t       dmcs2,
-//                             dmcs2_next,
-//                             dmcs2_i;
 
 assign hartinfo.nscratch = 4'd0;
-assign hartinfo.dataaccess = 1'b1;
-assign hartinfo.datasize = 4'd4;
-assign hartinfo.dataaddr = 12'd0;
+assign hartinfo.dataaccess = 1'b1;  // memory-mapped data regs
+assign hartinfo.datasize = 4'(DATA_SIZE);
+assign hartinfo.dataaddr = 12'h0;
 
 
 // ===== dmcontrol register =====
@@ -224,13 +230,13 @@ riscv_dm_pkg::abstractcs_t  abstractcs,
 assign abstractcs_i = req_data_i;
 
 // read only regs
-assign abstractcs_next.progbufsize = 4;
+assign abstractcs_next.progbufsize = 5'(PROGRAM_SIZE);
 assign abstractcs_next.busy = 0;
 assign abstractcs_next.relaxedpriv = 1;
-assign abstractcs_next.datacount = 1;
+assign abstractcs_next.datacount = 4'(DATA_SIZE);
 
 // ===== abstract command register =====
-riscv_dm_pkg::command_t  command_i;
+riscv_dm_pkg::command_t  command_i, command, command_next;
 
 assign command_i = req_data_i;
 
@@ -238,13 +244,12 @@ logic postexec, postexec_next;
 
 // ===== program buffer register =====
 logic prog_data_buf_we;
-logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf;
+logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf_next;
 
 logic abstract_cmd;
+logic [XLEN-1:0] rf_logi_phys_mapping, rf_logi_phys_mapping_next;
 
 always_comb begin
-    // hawindowsel_next = hawindowsel;
-    // hawindow_next = hawindow;
     hartsel_next = hartsel;
     dmcontrol_next = dmcontrol;
     abstractcs_next.cmderr = abstractcs.cmderr;
@@ -255,6 +260,19 @@ always_comb begin
     clear_ackhavereset = 0;
     prog_data_buf_we = 0;
     dm_state_op_next = IDLE;
+    command_next = command;
+    prog_data_buf_next = prog_data_buf;
+
+    // rnm defaults
+    rnm_read_en_o = 1'b0;
+    rnm_read_reg_o = '0;
+
+    // rf defaults
+    rf_en_o = 1'b0;
+    rf_we_o = 1'b0;
+    rf_preg_o = 1'b0;
+    rf_wdata_o = '0;
+
 
     case (dm_state)
         IDLE: begin
@@ -292,11 +310,11 @@ always_comb begin
                     resp_valid_o = 1;
                 end
                 riscv_dm_pkg::HARTINFO: begin
-                    resp_data_o = hartinfo;
+                    resp_data_o = 32'd0;    // TODO: not implemented
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                riscv_dm_pkg::COMMAND: begin
+                riscv_dm_pkg::COMMAND: begin // (WARZ)
                     resp_data_o = 32'd0;
                     resp_op_o = 0;
                     resp_valid_o = 1;
@@ -306,20 +324,21 @@ always_comb begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                riscv_dm_pkg::HAWINDOWSEL: begin
+                riscv_dm_pkg::HAWINDOWSEL: begin // TODO: not implemented (WARL)
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                riscv_dm_pkg::HAWINDOW: begin
+                riscv_dm_pkg::HAWINDOW: begin // TODO: not implemented (WARL)
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
                 [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA0+DATA_SIZE-1]: begin
-                    resp_data_o = 32'haaaa5555;
+                    resp_data_o = prog_data_buf[req_addr_i[4:0]];
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
                 [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF0+PROGRAM_SIZE-1]: begin
+                    resp_data_o = prog_data_buf[req_addr_i[4:0]];
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
@@ -391,9 +410,10 @@ always_comb begin
                 riscv_dm_pkg::COMMAND: begin
                     // if () begin
                     if (abstractcs.cmderr == 3'b0) begin
-                        if (command_i.cmdtype == 0) begin
+                        if (command_i.cmdtype == 8'd0) begin
                             if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
                                 abstract_cmd = 1'b1;
+                                command_next = command_i;
                                 if (command_i.control.postexec) begin
                                     postexec_next = 1'b1;
                                 end
@@ -414,20 +434,22 @@ always_comb begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                riscv_dm_pkg::HAWINDOWSEL: begin // TODO: hardcoded for now
+                riscv_dm_pkg::HAWINDOWSEL: begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
-                riscv_dm_pkg::HAWINDOW: begin // TODO: hardcoded for now
+                riscv_dm_pkg::HAWINDOW: begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
                 [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA11]: begin
                     prog_data_buf_we = 1;
+                    prog_data_buf_next[req_addr_i[4:0]] = req_data_i;
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
                 [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF15]: begin
+                    prog_data_buf_next[req_addr_i[4:0]] = req_data_i;
                     prog_data_buf_we = 1;
                     resp_op_o = 0;
                     resp_valid_o = 1;
@@ -449,7 +471,7 @@ always_comb begin
                     postexec_next = 0;
                     progbuf_run_req_o[hartsel] = 1'b1;
                     postexec_next = 1'b0;
-                    dm_state_next = EXEC_PROGBUF_WAIT_COMPLETION;
+                    dm_state_next = EXEC_PROGBUF_WAIT_START;
                 end else begin
                     dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
                 end
@@ -457,12 +479,45 @@ always_comb begin
         end
         ABSTRACT_CMD_REG_READ_RENAME: begin
             // asserts signals for reading rename table
+            rnm_read_en_o = 1'b1;
+            rnm_read_reg_o = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
+            rf_logi_phys_mapping_next = rnm_read_resp_i;
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
         ABSTRACT_CMD_REG_READ_DATA: begin
-            // asserts signals for reading physical RF
-            resp_data_o = 32'd0;
             resp_op_o = 0;
+
+            rf_preg_o = rf_logi_phys_mapping;
+            rf_en_o = 1'b1;
+            // asserts signals for reading physical RF
+            if (~command.control.write & command.control.transfer) begin // copy data from core register to data
+                // set signals for reading the RF
+
+                // TODO: optimize
+                if (command.control.aarsize == 3'd3) begin  // 64b access
+                    prog_data_buf_we = 1'b1;
+                    prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
+                    prog_data_buf_next[DATABUF_BEGIN+1] = rf_rdata_i[63:32];
+                end else if (command.control.aarsize == 3'd2) begin // 32b access
+                    prog_data_buf_we = 1'b1;
+                    prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
+                end else begin
+                    abstractcs_next.cmderr = 3'd2;
+                end
+            end else if (command.control.write & command.control.transfer) begin
+                rf_we_o = 1'b1;
+
+                // TODO: optimize
+                if (command.control.aarsize == 3'd3) begin  // 64b access
+                    rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
+                    rf_wdata_o[63:32] = prog_data_buf[DATABUF_BEGIN+1];
+                end else if (command.control.aarsize == 3'd2) begin // 32b access
+                    rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
+                end else begin
+                    abstractcs_next.cmderr = 3'd2;
+                end
+            end
+            resp_data_o = 32'd0;
             resp_valid_o = 1;
             dm_state_next = IDLE;
         end
@@ -484,25 +539,36 @@ always_comb begin
 end
 
 
+// ===== Program/Data buffer stuff =====
+
+logic [MEMORY_SEL_BITS-1:0] buf_addr;
+assign buf_addr = sri_addr_i[MEMORY_SEL_BITS+:BYTE_SEL_BITS];
+
+assign sri_rdata_o = sri_en_i ? prog_data_buf[buf_addr] : '0;
 
 
+// ===== Sequential register update block =====
 always_ff @( posedge clk_i ) begin
     if (~rstn_i) begin
         dmcontrol <= 0;
         dm_state <= IDLE;
 
         postexec <= 0;
+        command <= 0;
 
         // TODO: actual reset values
         hartsel <= hartsel_next;
         abstractcs.cmderr <= 3'b0;
         haltreqs <= haltreqs_next;
         resumereqs <= resumereqs_next;
+        prog_data_buf <= '0;
     end else begin
         dmcontrol <= dmcontrol_next;
         dm_state <= dm_state_next;
 
         postexec <= postexec_next;
+
+        command <= command_next;
 
         // handle dmcontrol updates
         hartsel <= hartsel_next;
@@ -517,38 +583,21 @@ always_ff @( posedge clk_i ) begin
         ackunavail <= ackunavail_next & ~clear_ackunavail;
 
         if (prog_data_buf_we) begin
-            prog_data_buf[req_addr_i[4:0]] <= req_data_i;
-        end
-    end
-end
-
-
-
-// ===== Program/Data buffers =====
-
-localparam PROGBUF_BEGIN = 0;
-localparam PROGBUF_END = PROGRAM_SIZE - 1;
-localparam DATABUF_BEGIN = PROGRAM_SIZE;
-localparam DATABUF_END =  DATABUF_BEGIN + DATA_SIZE - 1;
-
-logic [MEMORY_SEL_BITS-1:0] buf_addr;
-assign buf_addr = sri_addr_i[MEMORY_SEL_BITS+:BYTE_SEL_BITS];
-
-assign sri_rdata_o = sri_en_i ? prog_data_buf[buf_addr] : '0;
-
-generate
-always_ff @(posedge clk_i or negedge rstn_i) begin
-    if (~rstn_i) begin
-        prog_data_buf <= '0;
-    end else begin
-        if (sri_we_i & sri_en_i) begin
-            for (integer i = 0; i < BPW; i++) begin
-                prog_data_buf[i*8+:8] <= sri_wdata_i[i*8+:8];
+            prog_data_buf <= prog_data_buf_next;
+        end else begin
+            if (sri_we_i & sri_en_i) begin
+                for (integer i = 0; i < BPW; i++) begin
+                    if (sri_be_i[i])
+                        prog_data_buf[i*8+:8] <= sri_wdata_i[i*8+:8];
+                end
             end
         end
     end
 end
-endgenerate
+
+
+
+
 
 endmodule
 
