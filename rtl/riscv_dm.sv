@@ -587,7 +587,7 @@ always_ff @( posedge clk_i ) begin
             if (sri_we_i & sri_en_i) begin
                 for (integer i = 0; i < BPW; i++) begin
                     if (sri_be_i[i])
-                        prog_data_buf[i*8+:8] <= sri_wdata_i[i*8+:8];
+                        prog_data_buf[buf_addr][i*8+:8] <= sri_wdata_i[i*8+:8];
                 end
             end
         end
