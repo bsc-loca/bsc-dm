@@ -28,10 +28,9 @@
 
 //! Module Functionality
 //! --------------------
-//! ## Data Path
-//! Diagram of the Module
-//! This combinational module simply forwards the input to the output
-//! without doing anything else.
+//! The address space of the memory-mapped program and buffer is of 4B * (PROGRAM_SIZE+DATA_SIZE+1). The extra word is
+//! needed for being able to send implicit ebreak instructions when the core reaches the end of the program, both as
+//! a safeguard and as a way of not wasting one word with the ebrea instruction for getting out of debug mode
 
 module riscv_dm #(
     parameter  integer NUM_HARTS        = 1,                //! Number of harts connected to the Debug Module
@@ -46,7 +45,7 @@ module riscv_dm #(
     localparam integer LOGI_REG_BITS    = $clog2(NUM_LOGI_REGS),
 
     localparam integer BYTE_SEL_BITS    = $clog2(WORD_SIZE),
-    localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE),
+    localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
     localparam integer BPW              = WORD_SIZE,
     localparam integer ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
     localparam integer DATA_WIDTH       = BPW * 8
@@ -543,7 +542,17 @@ end
 logic [MEMORY_SEL_BITS-1:0] buf_addr;
 assign buf_addr = sri_addr_i[MEMORY_SEL_BITS+:BYTE_SEL_BITS];
 
-assign sri_rdata_o = sri_en_i ? prog_data_buf[buf_addr] : '0;
+
+always_comb begin
+    if (sri_en_i) begin
+        if (buf_addr > DATABUF_END) begin
+            sri_rdata_o = riscv_dm_pkg::EBREAK; // ebreak
+        end else begin
+            sri_rdata_o = prog_data_buf[buf_addr];
+        end
+    end
+end
+
 
 
 // ===== Sequential register update block =====

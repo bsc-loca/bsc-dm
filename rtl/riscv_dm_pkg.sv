@@ -23,6 +23,8 @@ package riscv_dm_pkg;
     } dmi_t;
     parameter integer DMI_WIDTH = $bits(dmi_t);
 
+    parameter logic [31:0] EBREAK = 32'h00100073;
+
 
 
    // ===== DTMCS definitions =====
