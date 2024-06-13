@@ -195,6 +195,7 @@ assign dmstatus.anyhalted = |(eff_hart_win_sel & halted_i);
 assign dmstatus.authenticated = 1;
 assign dmstatus.authbusy = 1'b0;
 
+assign dmstatus.impebreak = 1'b0;
 assign dmstatus.hasresethaltreq = 1'b0; // TODO: implement if we have time
 assign dmstatus.confstrptrvalid = 0;
 assign dmstatus.version = 4'd3;
@@ -237,6 +238,7 @@ logic abstract_cmd;
 
 always_comb begin
     hartsel_next = hartsel;
+    dm_state_next = dm_state;
     dmcontrol_next = dmcontrol;
     dmcontrol_next.resumereq = 0;
     dmcontrol_next.ackhavereset = 0;
@@ -257,6 +259,7 @@ always_comb begin
     dm_state_op_next = IDLE;
     command_next = command;
     prog_data_buf_next = prog_data_buf;
+    abstract_cmd = 0;
 
     // rnm defaults
     rnm_read_en_o = 1'b0;
@@ -551,7 +554,7 @@ end
 
 
 // ===== Sequential register update block =====
-always_ff @( posedge clk_i ) begin
+always_ff @( posedge clk_i or negedge rstn_i) begin
     if (~rstn_i) begin
         dmcontrol <= 0;
         dm_state <= IDLE;
