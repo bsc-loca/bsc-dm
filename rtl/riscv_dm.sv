@@ -266,6 +266,8 @@ always_comb begin
     prog_data_buf_next = prog_data_buf;
     abstract_cmd = 0;
     progbuf_run_req_o = 'b0;
+    resumereqs_next = resumereqs;
+    haltreqs_next = haltreqs;
 
     // rnm defaults
     rnm_read_en_o = 1'b0;
@@ -568,10 +570,10 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         command <= 0;
 
         // TODO: actual reset values
-        hartsel <= hartsel_next;
+        hartsel <= '0;
         abstractcs.cmderr <= 3'b0;
-        haltreqs <= haltreqs_next;
-        resumereqs <= resumereqs_next;
+        haltreqs <= '0;
+        resumereqs <= '0;
         prog_data_buf <= '0;
     end else begin
         dmcontrol <= dmcontrol_next;
