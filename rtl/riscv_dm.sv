@@ -236,6 +236,11 @@ logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf
 
 logic abstract_cmd;
 
+
+// tie some unused signals for now
+assign hart_reset_o = 0;
+assign halt_on_reset_o = 0;
+
 always_comb begin
     hartsel_next = hartsel;
     dm_state_next = dm_state;
@@ -260,6 +265,7 @@ always_comb begin
     command_next = command;
     prog_data_buf_next = prog_data_buf;
     abstract_cmd = 0;
+    progbuf_run_req_o = 'b0;
 
     // rnm defaults
     rnm_read_en_o = 1'b0;
@@ -519,7 +525,6 @@ always_comb begin
         end
         EXEC_PROGBUF_WAIT_START: begin  // wait for the core to receive the request of executing the program buffer
             if (progbuf_run_ack_i[hartsel]) begin
-                progbuf_run_req_o[hartsel] = 1'b0;
                 dm_state_next = EXEC_PROGBUF_WAIT_EBREAK;
             end
         end
