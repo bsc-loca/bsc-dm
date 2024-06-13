@@ -98,6 +98,15 @@ jtag_tap jtag_tap_inst(
     .dtmcs_tdi_i(dtmcs_tdi)
 );
 
+typedef enum logic [1:0] {
+    DMI_IDLE,
+    DMI_EXEC,
+    DMI_EXEC_WAIT,
+    DMI_READBACK_WAIT
+} dmi_state_t;
+
+dmi_state_t dmi_state, dmi_state_next;
+
 
 // dmi JTAG reg handling
 logic [riscv_dm_pkg::DMI_WIDTH-1:0]   dmi_reg, dmi_reg_latched;
@@ -137,15 +146,6 @@ end
 
 
 // ===== DMI register management =====
-
-typedef enum logic [1:0] {
-    DMI_IDLE,
-    DMI_EXEC,
-    DMI_EXEC_WAIT,
-    DMI_READBACK_WAIT
-} dmi_state_t;
-
-dmi_state_t dmi_state, dmi_state_next;
 
 always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
     if(trst_i | dtmcs_hard_reset) begin
