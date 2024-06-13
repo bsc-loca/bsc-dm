@@ -48,7 +48,7 @@ module riscv_dm #(
     localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
     localparam integer BPW              = WORD_SIZE,
     localparam integer ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
-    localparam integer DATA_WIDTH       = BPW * 8
+    localparam integer DATA_WIDTH       = 64 //! Size of the SRI data channel
 ) (
     input   logic                                       clk_i,      //! Clock signal
     input   logic                                       rstn_i,     //! Reset signal (active low)
@@ -551,9 +551,9 @@ assign buf_addr = sri_addr_i[MEMORY_SEL_BITS+:BYTE_SEL_BITS];
 always_comb begin
     if (sri_en_i) begin
         if (buf_addr > DATABUF_END) begin
-            sri_rdata_o = riscv_dm_pkg::EBREAK; // ebreak
+            sri_rdata_o = {riscv_dm_pkg::EBREAK, riscv_dm_pkg::EBREAK}; // ebreak
         end else begin
-            sri_rdata_o = prog_data_buf[buf_addr];
+            sri_rdata_o = {prog_data_buf[buf_addr+1], prog_data_buf[buf_addr]};
         end
     end
 end
