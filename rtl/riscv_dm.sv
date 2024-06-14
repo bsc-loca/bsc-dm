@@ -476,7 +476,7 @@ always_comb begin
                     postexec_next = 0;
                     progbuf_run_req_o[hartsel] = 1'b1;
                     postexec_next = 1'b0;
-                    dm_state_next = EXEC_PROGBUF_WAIT_START;
+                    dm_state_next = progbuf_run_ack_i[hartsel] ? EXEC_PROGBUF_WAIT_EBREAK : EXEC_PROGBUF_WAIT_START;
                 end else begin
                     dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
                 end
@@ -531,7 +531,7 @@ always_comb begin
             end
         end
         EXEC_PROGBUF_WAIT_EBREAK: begin // wait for the core to finish executing the program buffer and run ebreak
-            if (halted_i[hartsel]) begin
+            if (parked_i[hartsel]) begin
                 resp_op_o = 0;
                 resp_valid_o = 1;
                 dm_state_next = IDLE;
