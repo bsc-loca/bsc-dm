@@ -256,7 +256,7 @@ always_comb begin
     dmcontrol_next.clrresethaltreq = 0;
     abstractcs_next.cmderr = abstractcs.cmderr;
     postexec_next = postexec;
-    req_ready_o = 1;
+    req_ready_o = 0;
     resp_valid_o = 0;
     resp_op_o = 0; // err
     clear_ackhavereset = 0;
@@ -281,6 +281,7 @@ always_comb begin
 
     case (dm_state)
         IDLE: begin
+            req_ready_o = 1;
             if (req_valid_i) begin
                 case (req_op_i)
                     riscv_dm_pkg::WR_OP_NOP: dm_state_next = NOP;
@@ -362,7 +363,6 @@ always_comb begin
                 dm_state_next = IDLE;
         end
         WRITE: begin
-            req_ready_o = 0;
             resp_data_o = 0;
             dm_state_op_next = IDLE;
 
@@ -472,7 +472,7 @@ always_comb begin
             if (resp_ready_i && ~abstract_cmd) begin
                 dm_state_next = IDLE;
             end else if (resp_ready_i && abstract_cmd) begin
-                if (postexec) begin
+                if (command_i.control.postexec) begin
                     postexec_next = 0;
                     progbuf_run_req_o[hartsel] = 1'b1;
                     postexec_next = 1'b0;
