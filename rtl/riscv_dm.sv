@@ -46,7 +46,7 @@ module riscv_dm #(
 
     localparam integer BYTE_SEL_BITS    = $clog2(WORD_SIZE),
     localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
-    localparam integer BPW              = WORD_SIZE,
+    localparam integer BPW              = 8,
     localparam integer ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
     localparam integer DATA_WIDTH       = 64 //! Size of the SRI data channel
 ) (
@@ -545,7 +545,7 @@ end
 // ===== Program/Data buffer stuff =====
 
 logic [MEMORY_SEL_BITS-1:0] buf_addr;
-assign buf_addr = sri_addr_i[MEMORY_SEL_BITS+:BYTE_SEL_BITS];
+assign buf_addr = sri_addr_i[BYTE_SEL_BITS+:MEMORY_SEL_BITS];
 
 
 always_comb begin
