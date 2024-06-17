@@ -170,6 +170,8 @@ riscv_dm_pkg::dmstatus_t dmstatus;
 logic [NUM_HARTS-1:0] eff_hart_win_sel;
 assign eff_hart_win_sel = hawindowsel | (1'b1 << hartsel);
 
+logic [NUM_HARTS-1:0] sticky_resume_ack;
+
 // TODO: parametrize
 assign dmstatus.ndmresetpending = 0;
 assign dmstatus.stickyunavail = 0;
@@ -177,8 +179,8 @@ assign dmstatus.stickyunavail = 0;
 assign dmstatus.allhavereset = &(eff_hart_win_sel & havereset_i);
 assign dmstatus.anyhavereset = |(eff_hart_win_sel & havereset_i);
 
-assign dmstatus.allresumeack = &(eff_hart_win_sel & resume_ack_i);
-assign dmstatus.anyresumeack = |(eff_hart_win_sel & resume_ack_i);
+assign dmstatus.allresumeack = &(eff_hart_win_sel & sticky_resume_ack);
+assign dmstatus.anyresumeack = |(eff_hart_win_sel & sticky_resume_ack);
 
 assign dmstatus.anynonexistent = eff_hart_win_sel != 'h1; // TODO: fix this
 assign dmstatus.allnonexistent = eff_hart_win_sel != 'h1;
@@ -239,6 +241,18 @@ logic abstract_cmd;
 assign hart_reset_o = 0;
 assign halt_on_reset_o = 0;
 
+always_ff @( posedge clk_i or negedge rstn_i) begin
+    if (~rstn_i) begin
+        sticky_resume_ack <= '0;
+    end else begin
+        if (dmcontrol.resumereq) begin
+            sticky_resume_ack <= '0; // New resume request, clear sticky
+        end else begin
+            sticky_resume_ack <= sticky_resume_ack | resume_ack_i;
+        end
+    end
+end
+
 always_comb begin
     hartsel_next = hartsel;
     dm_state_next = dm_state;
@@ -263,7 +277,7 @@ always_comb begin
     prog_data_buf_next = prog_data_buf;
     abstract_cmd = 0;
     progbuf_run_req_o = 'b0;
-    resumereqs_next = resumereqs;
+    resumereqs_next = resumereqs & ~resume_ack_i; // Clear ack'd requests
     haltreqs_next = haltreqs;
 
     // rnm defaults
