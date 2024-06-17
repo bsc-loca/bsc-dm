@@ -228,8 +228,6 @@ assign abstractcs_next.datacount = 4'(DATA_SIZE);
 
 assign rnm_read_reg_o = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
 
-logic postexec, postexec_next;
-
 // ===== program buffer register =====
 logic prog_data_buf_we;
 logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf_next;
@@ -255,7 +253,6 @@ always_comb begin
     dmcontrol_next.setresethaltreq = 0;
     dmcontrol_next.clrresethaltreq = 0;
     abstractcs_next.cmderr = abstractcs.cmderr;
-    postexec_next = postexec;
     req_ready_o = 0;
     resp_valid_o = 0;
     resp_op_o = 0; // err
@@ -419,9 +416,6 @@ always_comb begin
                             if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
                                 abstract_cmd = 1'b1;
                                 command_next = command_i;
-                                if (command_i.control.postexec) begin
-                                    postexec_next = 1'b1;
-                                end
                             end else begin
                                 abstractcs_next.cmderr = 3'd2; // not supported
                                 resp_op_o = 0;
@@ -476,14 +470,7 @@ always_comb begin
             if (resp_ready_i && ~abstract_cmd) begin
                 dm_state_next = IDLE;
             end else if (resp_ready_i && abstract_cmd) begin
-                if (command_i.control.postexec) begin
-                    postexec_next = 0;
-                    progbuf_run_req_o[hartsel] = 1'b1;
-                    postexec_next = 1'b0;
-                    dm_state_next = progbuf_run_ack_i[hartsel] ? EXEC_PROGBUF_WAIT_EBREAK : EXEC_PROGBUF_WAIT_START;
-                end else begin
-                    dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
-                end
+                dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
             end
         end
         ABSTRACT_CMD_REG_READ_RENAME: begin
@@ -525,9 +512,15 @@ always_comb begin
                     abstractcs_next.cmderr = 3'd2;
                 end
             end
-            resp_data_o = 32'd0;
-            resp_valid_o = 1;
-            dm_state_next = IDLE;
+
+            if (command.control.postexec) begin
+                progbuf_run_req_o[hartsel] = 1'b1;
+                dm_state_next = progbuf_run_ack_i[hartsel] ? EXEC_PROGBUF_WAIT_EBREAK : EXEC_PROGBUF_WAIT_START;
+            end else begin
+                resp_data_o = 32'd0;
+                resp_valid_o = 1;
+                dm_state_next = IDLE;
+            end
         end
         EXEC_PROGBUF_WAIT_START: begin  // wait for the core to receive the request of executing the program buffer
             if (progbuf_run_ack_i[hartsel]) begin
@@ -572,7 +565,6 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         dmcontrol <= 0;
         dm_state <= IDLE;
 
-        postexec <= 0;
         command <= 0;
 
         // TODO: actual reset values
@@ -584,8 +576,6 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
     end else begin
         dmcontrol <= dmcontrol_next;
         dm_state <= dm_state_next;
-
-        postexec <= postexec_next;
 
         command <= command_next;
 
