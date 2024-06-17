@@ -475,48 +475,49 @@ always_comb begin
         end
         ABSTRACT_CMD_REG_READ_RENAME: begin
             // asserts signals for reading rename table
-            rnm_read_en_o = 1'b1;
+            rnm_read_en_o = command.control.transfer;
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
         ABSTRACT_CMD_REG_READ_DATA: begin
-            resp_op_o = 0;
-            rnm_read_en_o = 1'b1;
-
-            rf_preg_o = rnm_read_resp_i;
-            rf_en_o = 1'b1;
-            // asserts signals for reading physical RF
-            if (~command.control.write & command.control.transfer) begin // copy data from core register to data
-                // set signals for reading the RF
-
+            // Transfer bit might not be active, even in this state, because
+            // we are passing by this state to go to the prog. buf. execution.
+            if (command.control.transfer) begin
+                // asserts signals for reading physical RF
                 // TODO: optimize
-                if (command.control.aarsize == 3'd3) begin  // 64b access
-                    prog_data_buf_we = 1'b1;
-                    prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
-                    prog_data_buf_next[DATABUF_BEGIN+1] = rf_rdata_i[63:32];
-                end else if (command.control.aarsize == 3'd2) begin // 32b access
-                    prog_data_buf_we = 1'b1;
-                    prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
+                rf_preg_o = rnm_read_resp_i;
+                
+                if (command.control.write) begin
+                    rf_we_o = 1'b1;
+                    if (command.control.aarsize == 3'd3) begin  // 64b access
+                        rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
+                        rf_wdata_o[63:32] = prog_data_buf[DATABUF_BEGIN+1];
+                    end else if (command.control.aarsize == 3'd2) begin // 32b access
+                        rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
+                    end else begin
+                        abstractcs_next.cmderr = 3'd2;
+                    end
                 end else begin
-                    abstractcs_next.cmderr = 3'd2;
-                end
-            end else if (command.control.write & command.control.transfer) begin
-                rf_we_o = 1'b1;
-
-                // TODO: optimize
-                if (command.control.aarsize == 3'd3) begin  // 64b access
-                    rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
-                    rf_wdata_o[63:32] = prog_data_buf[DATABUF_BEGIN+1];
-                end else if (command.control.aarsize == 3'd2) begin // 32b access
-                    rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
-                end else begin
-                    abstractcs_next.cmderr = 3'd2;
+                    rf_en_o = 1'b1;
+                    if (command.control.aarsize == 3'd3) begin  // 64b access
+                        prog_data_buf_we = 1'b1;
+                        prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
+                        prog_data_buf_next[DATABUF_BEGIN+1] = rf_rdata_i[63:32];
+                    end else if (command.control.aarsize == 3'd2) begin // 32b access
+                        prog_data_buf_we = 1'b1;
+                        prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
+                    end else begin
+                        abstractcs_next.cmderr = 3'd2;
+                    end
                 end
             end
 
             if (command.control.postexec) begin
+                // Not finished yet, we still have to run the program buffer
                 progbuf_run_req_o[hartsel] = 1'b1;
                 dm_state_next = progbuf_run_ack_i[hartsel] ? EXEC_PROGBUF_WAIT_EBREAK : EXEC_PROGBUF_WAIT_START;
             end else begin
+                // We are done, give a response
+                resp_op_o = 0;
                 resp_data_o = 32'd0;
                 resp_valid_o = 1;
                 dm_state_next = IDLE;
