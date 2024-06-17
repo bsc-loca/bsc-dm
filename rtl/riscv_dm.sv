@@ -414,7 +414,7 @@ always_comb begin
                 end
                 riscv_dm_pkg::COMMAND: begin
                     // if () begin
-                    if (abstractcs.cmderr == 3'b0) begin
+                    if (abstractcs.cmderr == 3'b0 & halted_i[hartsel]) begin
                         if (command_i.cmdtype == 8'd0) begin
                             if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
                                 abstract_cmd = 1'b1;
@@ -432,6 +432,10 @@ always_comb begin
                             resp_op_o = 0;
                             resp_valid_o = 1;
                         end
+                    end else if (~halted_i[hartsel]) begin
+                        abstractcs_next.cmderr = 3'h4;
+                        resp_op_o = 0;
+                        resp_valid_o = 1;
                     end
                 end
                 riscv_dm_pkg::ABSTRACTCS: begin
