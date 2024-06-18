@@ -3,7 +3,7 @@ package riscv_dm_pkg;
     parameter logic [2:0] DTM_IDLE_CYCLES = 3'd2;
     parameter integer DMI_OP_WIDTH = 2;
     parameter integer DMI_DATA_WIDTH = 32;
-    parameter integer DMI_ADDR_WIDTH = 7;
+    parameter integer DMI_ADDR_WIDTH = 9;
 
 
     // ===== DMI definitions =====

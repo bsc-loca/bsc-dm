@@ -68,36 +68,39 @@ module riscv_dm #(
     output  logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]      resp_op_o,
     //! @end
 
+    //TODO: replace all buses with structs/interfaces
     // Hart run control signals
-    output logic [NUM_HARTS-1:0]                        resume_request_o,
-    input logic [NUM_HARTS-1:0]                         resume_ack_i,
-    input logic [NUM_HARTS-1:0]                         running_i,
+    //! @virtualbus hartctl @dir in
+    output logic    resume_request_o    [NUM_HARTS-1:0],
+    input  logic    resume_ack_i        [NUM_HARTS-1:0],
+    input  logic    running_i           [NUM_HARTS-1:0],
 
-    output logic [NUM_HARTS-1:0]                        halt_request_o,
-    input logic [NUM_HARTS-1:0]                         halted_i,
+    output logic    halt_request_o      [NUM_HARTS-1:0],
+    input  logic    halted_i            [NUM_HARTS-1:0],
 
-    output logic [NUM_HARTS-1:0]                        progbuf_run_req_o,
-    input logic [NUM_HARTS-1:0]                         progbuf_run_ack_i,
-    input logic [NUM_HARTS-1:0]                         parked_i,
+    output logic    progbuf_run_req_o   [NUM_HARTS-1:0],
+    input  logic    progbuf_run_ack_i   [NUM_HARTS-1:0],
+    input  logic    parked_i            [NUM_HARTS-1:0],
 
-    output logic [NUM_HARTS-1:0]                        halt_on_reset_o,
-    output logic [NUM_HARTS-1:0]                        hart_reset_o,
-    input logic [NUM_HARTS-1:0]                         havereset_i,
+    output logic    halt_on_reset_o     [NUM_HARTS-1:0],
+    output logic    hart_reset_o        [NUM_HARTS-1:0],
+    input  logic    havereset_i         [NUM_HARTS-1:0],
 
-    input logic [NUM_HARTS-1:0]                         unavail_i,
+    input  logic    unavail_i           [NUM_HARTS-1:0],
+    //! @end
 
     // Register read abstract command signals
     //! @virtualbus regfilebus @dir in
-    output logic                        rnm_read_en_o,   //! Request reading the rename table
-    output logic [LOGI_REG_BITS-1:0]    rnm_read_reg_o,  //! Logical register for which the mapping is read
-    input  logic [PHYS_REG_BITS-1:0]    rnm_read_resp_i, //! Physical register mapped to the requested logical register
+    output logic                        rnm_read_en_o   [NUM_HARTS-1:0],    //! Request reading the rename table
+    output logic [LOGI_REG_BITS-1:0]    rnm_read_reg_o  [NUM_HARTS-1:0],    //! Logical register for which the mapping is read
+    input  logic [PHYS_REG_BITS-1:0]    rnm_read_resp_i [NUM_HARTS-1:0],    //! Physical register mapped to the requested logical register
 
-    output logic                        rf_en_o,            //! Read enable for the register file
-    output logic [PHYS_REG_BITS-1:0]    rf_preg_o,          //! Target physical register in the register file
-    input  logic [XLEN-1:0]             rf_rdata_i,         //! Data read from the register file
+    output logic                        rf_en_o         [NUM_HARTS-1:0],    //! Read enable for the register file
+    output logic [PHYS_REG_BITS-1:0]    rf_preg_o       [NUM_HARTS-1:0],    //! Target physical register in the register file
+    input  logic [XLEN-1:0]             rf_rdata_i      [NUM_HARTS-1:0],    //! Data read from the register file
 
-    output logic                        rf_we_o,            //! Write enable for the register file
-    output  logic [XLEN-1:0]            rf_wdata_o,         //! Data to write to the register file
+    output logic                        rf_we_o         [NUM_HARTS-1:0],    //! Write enable for the register file
+    output  logic [XLEN-1:0]            rf_wdata_o      [NUM_HARTS-1:0],    //! Data to write to the register file
     //! @end
 
 
