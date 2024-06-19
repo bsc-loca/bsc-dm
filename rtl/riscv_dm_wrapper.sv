@@ -101,6 +101,9 @@ module riscv_dm_wrapper #(
         .SRI_ADDR_WIDTH(ADDR_WIDTH),
         .SRI_DATA_WIDTH(DATA_WIDTH)
     ) axilite_to_sri_inst (
+        .clk_i(clk_i),
+        .rstn_i(rstn_i),
+
         .m_awaddr_i(m_awaddr_i),
         .m_awvalid_i(m_awvalid_i),
         .m_awready_o(m_awready_o),
@@ -148,12 +151,12 @@ module riscv_dm_wrapper #(
     logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]      resp_op_cdc;
 
     riscv_dtm dtm(
-        .tms_i(tms),
-        .tck_i(tck),
-        .trst_i(~trstn),
-        .tdi_i(tdi),
-        .tdo_o(tdo),
-        .tdo_driven_o(tdo_driven),
+        .tms_i(tms_i),
+        .tck_i(tck_i),
+        .trst_i(trst_i),
+        .tdi_i(tdi_i),
+        .tdo_o(tdo_o),
+        .tdo_driven_o(tdo_driven_o),
 
         .req_valid_o(req_valid),
         .req_ready_i(req_ready),
@@ -170,16 +173,16 @@ module riscv_dm_wrapper #(
     cdc_fifo_gray_clearable #(
         .WIDTH(riscv_dm_pkg::DMI_ADDR_WIDTH+riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH)
     ) req_cdc_fifo (
-        .src_rst_ni(trstn),
-        .src_clk_i(tck),
+        .src_rst_ni(~trst_i),
+        .src_clk_i(tck_i),
         .src_clear_i(0),
         .src_clear_pending_o(),
         .src_data_i({req_addr, req_data, req_op}),
         .src_valid_i(req_valid),
         .src_ready_o(req_ready),
 
-        .dst_rst_ni(rstn),
-        .dst_clk_i(clk),
+        .dst_rst_ni(rstn_i),
+        .dst_clk_i(clk_i),
         .dst_clear_i(0),
         .dst_clear_pending_o(),
         .dst_data_o({req_addr_cdc, req_data_cdc, req_op_cdc}),
@@ -190,16 +193,16 @@ module riscv_dm_wrapper #(
     cdc_fifo_gray_clearable #(
         .WIDTH(riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH)
     ) resp_cdc_fifo (
-        .src_rst_ni(rstn),
-        .src_clk_i(clk),
+        .src_rst_ni(rstn_i),
+        .src_clk_i(clk_i),
         .src_clear_i(0),
         .src_clear_pending_o(),
         .src_data_i({resp_data, resp_op}),
         .src_valid_i(resp_valid),
         .src_ready_o(resp_ready),
 
-        .dst_rst_ni(trstn),
-        .dst_clk_i(tck),
+        .dst_rst_ni(~trst_i),
+        .dst_clk_i(tck_i),
         .dst_clear_i(0),
         .dst_clear_pending_o(),
         .dst_data_o({resp_data_cdc, resp_op_cdc}),
@@ -216,8 +219,8 @@ module riscv_dm_wrapper #(
         .WORD_SIZE(WORD_SIZE),
         .NUM_PHYS_REGS(NUM_PHYS_REGS)
     ) dm(
-        .clk_i(clk),
-        .rstn_i(rstn),
+        .clk_i(clk_i),
+        .rstn_i(rstn_i),
 
         .req_valid_i(req_valid_cdc),
         .req_ready_o(req_ready_cdc),
