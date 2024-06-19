@@ -117,10 +117,10 @@ module riscv_dm #(
 );
 
 logic rnm_read_en;
-logic rnm_read_reg;
+logic [LOGI_REG_BITS-1:0] rnm_read_reg;
 logic [PHYS_REG_BITS-1:0] rnm_read_resp;
 logic rf_en;
-logic rf_preg;
+logic [PHYS_REG_BITS-1:0] rf_preg;
 logic [XLEN-1:0] rf_rdata;
 logic rf_we;
 logic [XLEN-1:0] rf_wdata;
@@ -505,6 +505,7 @@ always_comb begin
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
         ABSTRACT_CMD_REG_READ_DATA: begin
+            rnm_read_en = command.control.transfer;
             // Transfer bit might not be active, even in this state, because
             // we are passing by this state to go to the prog. buf. execution.
             if (command.control.transfer) begin
