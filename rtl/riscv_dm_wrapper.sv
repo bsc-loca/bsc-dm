@@ -57,22 +57,22 @@ module riscv_dm_wrapper #(
     //TODO: replace all buses with structs/interfaces
     // Hart run control signals
     //! @virtualbus hartctl @dir in
-    output logic    resume_request_o    [NUM_HARTS-1:0],
-    input  logic    resume_ack_i        [NUM_HARTS-1:0],
-    input  logic    running_i           [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   resume_request_o,
+    input  logic [NUM_HARTS-1:0]   resume_ack_i,
+    input  logic [NUM_HARTS-1:0]   running_i,
 
-    output logic    halt_request_o      [NUM_HARTS-1:0],
-    input  logic    halted_i            [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   halt_request_o,
+    input  logic [NUM_HARTS-1:0]   halted_i,
 
-    output logic    progbuf_run_req_o   [NUM_HARTS-1:0],
-    input  logic    progbuf_run_ack_i   [NUM_HARTS-1:0],
-    input  logic    parked_i            [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   progbuf_run_req_o,
+    input  logic [NUM_HARTS-1:0]   progbuf_run_ack_i,
+    input  logic [NUM_HARTS-1:0]   parked_i,
 
-    output logic    halt_on_reset_o     [NUM_HARTS-1:0],
-    output logic    hart_reset_o        [NUM_HARTS-1:0],
-    input  logic    havereset_i         [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   halt_on_reset_o,
+    output logic [NUM_HARTS-1:0]   hart_reset_o,
+    input  logic [NUM_HARTS-1:0]   havereset_i,
 
-    input  logic    unavail_i           [NUM_HARTS-1:0],
+    input  logic [NUM_HARTS-1:0]   unavail_i,
     //! @end
 
     // Register read abstract command signals
@@ -89,13 +89,18 @@ module riscv_dm_wrapper #(
     output  logic [XLEN-1:0]            rf_wdata_o      [NUM_HARTS-1:0]
     //! @end
 );
+    logic [ADDR_WIDTH-1:0]      sri_addr;
+    logic                       sri_en, sri_we, sri_error;
+    logic [DATA_WIDTH-1:0]      sri_wdata;
+    logic [DATA_WIDTH-1:0]      sri_rdata;
+    logic [(DATA_WIDTH/8)-1:0]  sri_be;
 
     axilite_to_sri #(
         .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
         .AXI_DATA_WIDTH(AXI_DATA_WIDTH),
         .SRI_ADDR_WIDTH(ADDR_WIDTH),
         .SRI_DATA_WIDTH(DATA_WIDTH)
-    ) (
+    ) axilite_to_sri_inst (
         .m_awaddr_i(m_awaddr_i),
         .m_awvalid_i(m_awvalid_i),
         .m_awready_o(m_awready_o),
@@ -121,13 +126,6 @@ module riscv_dm_wrapper #(
         .sri_rdata_i(sri_rdata),
         .sri_error_i(sri_error)
     );
-
-    logic [ADDR_WIDTH-1:0]      sri_addr;
-    logic                       sri_en, sri_we, sri_error;
-    logic [DATA_WIDTH-1:0]      sri_wdata;
-    logic [DATA_WIDTH-1:0]      sri_rdata;
-    logic [(DATA_WIDTH/8)-1:0]  sri_be;
-
 
     logic                                       req_valid;
     logic                                       req_ready;
@@ -211,7 +209,13 @@ module riscv_dm_wrapper #(
 
     logic halt_request, resume_request, halted, resumeack;
 
-    riscv_dm dm(
+    riscv_dm #(
+        .NUM_HARTS(NUM_HARTS),
+        .PROGRAM_SIZE(PROGRAM_SIZE),
+        .DATA_SIZE(DATA_SIZE),
+        .WORD_SIZE(WORD_SIZE),
+        .NUM_PHYS_REGS(NUM_PHYS_REGS)
+    ) dm(
         .clk_i(clk),
         .rstn_i(rstn),
 

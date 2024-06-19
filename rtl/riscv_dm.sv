@@ -71,22 +71,22 @@ module riscv_dm #(
     //TODO: replace all buses with structs/interfaces
     // Hart run control signals
     //! @virtualbus hartctl @dir in
-    output logic    resume_request_o    [NUM_HARTS-1:0],
-    input  logic    resume_ack_i        [NUM_HARTS-1:0],
-    input  logic    running_i           [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   resume_request_o,
+    input  logic [NUM_HARTS-1:0]   resume_ack_i,
+    input  logic [NUM_HARTS-1:0]   running_i,
 
-    output logic    halt_request_o      [NUM_HARTS-1:0],
-    input  logic    halted_i            [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   halt_request_o,
+    input  logic [NUM_HARTS-1:0]   halted_i,
 
-    output logic    progbuf_run_req_o   [NUM_HARTS-1:0],
-    input  logic    progbuf_run_ack_i   [NUM_HARTS-1:0],
-    input  logic    parked_i            [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   progbuf_run_req_o,
+    input  logic [NUM_HARTS-1:0]   progbuf_run_ack_i,
+    input  logic [NUM_HARTS-1:0]   parked_i,
 
-    output logic    halt_on_reset_o     [NUM_HARTS-1:0],
-    output logic    hart_reset_o        [NUM_HARTS-1:0],
-    input  logic    havereset_i         [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]   halt_on_reset_o,
+    output logic [NUM_HARTS-1:0]   hart_reset_o,
+    input  logic [NUM_HARTS-1:0]   havereset_i,
 
-    input  logic    unavail_i           [NUM_HARTS-1:0],
+    input  logic [NUM_HARTS-1:0]   unavail_i,
     //! @end
 
     // Register read abstract command signals
@@ -115,6 +115,15 @@ module riscv_dm #(
     output logic                                        sri_error_o     //! register interface error
     //! @end
 );
+
+logic rnm_read_en;
+logic rnm_read_reg;
+logic [PHYS_REG_BITS-1:0] rnm_read_resp;
+logic rf_en;
+logic rf_preg;
+logic [XLEN-1:0] rf_rdata;
+logic rf_we;
+logic [XLEN-1:0] rf_wdata;
 
 
 localparam PROGBUF_BEGIN = 0;
@@ -231,7 +240,7 @@ assign abstractcs_next.relaxedpriv = 1;
 assign abstractcs_next.datacount = 4'(DATA_SIZE);
 
 
-assign rnm_read_reg_o = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
+assign rnm_read_reg = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
 
 // ===== program buffer register =====
 logic prog_data_buf_we;
@@ -284,13 +293,13 @@ always_comb begin
     haltreqs_next = haltreqs;
 
     // rnm defaults
-    rnm_read_en_o = 1'b0;
+    rnm_read_en = 'b0;
 
     // rf defaults
-    rf_en_o = 1'b0;
-    rf_we_o = 1'b0;
-    rf_preg_o = 1'b0;
-    rf_wdata_o = '0;
+    rf_en = 'b0;
+    rf_we = 'b0;
+    rf_preg = 'b0;
+    rf_wdata = 'b0;
 
 
     case (dm_state)
@@ -313,7 +322,7 @@ always_comb begin
         end
         READ: begin
             resp_data_o = 32'hcafebabe;
-            case (req_addr_i) inside
+            case (req_addr_i[6:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     resp_data_o = dmcontrol;
                     resp_op_o = 0;
@@ -380,7 +389,7 @@ always_comb begin
             resp_data_o = 0;
             dm_state_op_next = IDLE;
 
-            case (req_addr_i) inside
+            case (req_addr_i[6:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     // individual hartsel handling
                     if ({dmcontrol_i.hartselhi, dmcontrol_i.hartsello} < 20'(NUM_HARTS)) begin
@@ -492,7 +501,7 @@ always_comb begin
         end
         ABSTRACT_CMD_REG_READ_RENAME: begin
             // asserts signals for reading rename table
-            rnm_read_en_o = command.control.transfer;
+            rnm_read_en = command.control.transfer;
             dm_state_next = ABSTRACT_CMD_REG_READ_DATA;
         end
         ABSTRACT_CMD_REG_READ_DATA: begin
@@ -501,27 +510,27 @@ always_comb begin
             if (command.control.transfer) begin
                 // asserts signals for reading physical RF
                 // TODO: optimize
-                rf_preg_o = rnm_read_resp_i;
-                
+                rf_preg = rnm_read_resp;
+
                 if (command.control.write) begin
-                    rf_we_o = 1'b1;
+                    rf_we = 1'b1;
                     if (command.control.aarsize == 3'd3) begin  // 64b access
-                        rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
-                        rf_wdata_o[63:32] = prog_data_buf[DATABUF_BEGIN+1];
+                        rf_wdata[31:0] = prog_data_buf[DATABUF_BEGIN];
+                        rf_wdata[63:32] = prog_data_buf[DATABUF_BEGIN+1];
                     end else if (command.control.aarsize == 3'd2) begin // 32b access
-                        rf_wdata_o[31:0] = prog_data_buf[DATABUF_BEGIN];
+                        rf_wdata[31:0] = prog_data_buf[DATABUF_BEGIN];
                     end else begin
                         abstractcs_next.cmderr = 3'd2;
                     end
                 end else begin
-                    rf_en_o = 1'b1;
+                    rf_en = 1'b1;
                     if (command.control.aarsize == 3'd3) begin  // 64b access
                         prog_data_buf_we = 1'b1;
-                        prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
-                        prog_data_buf_next[DATABUF_BEGIN+1] = rf_rdata_i[63:32];
+                        prog_data_buf_next[DATABUF_BEGIN] = rf_rdata[31:0];
+                        prog_data_buf_next[DATABUF_BEGIN+1] = rf_rdata[63:32];
                     end else if (command.control.aarsize == 3'd2) begin // 32b access
                         prog_data_buf_we = 1'b1;
-                        prog_data_buf_next[DATABUF_BEGIN] = rf_rdata_i[31:0];
+                        prog_data_buf_next[DATABUF_BEGIN] = rf_rdata[31:0];
                     end else begin
                         abstractcs_next.cmderr = 3'd2;
                     end
@@ -554,6 +563,28 @@ always_comb begin
         end
         default:;
     endcase
+end
+
+always_comb begin: hartsel_mux
+    for (integer i = 0; i < NUM_HARTS; i++) begin
+        if (i == hartsel) begin
+            rnm_read_en_o[i] = rnm_read_en;
+            rnm_read_reg_o[i] = rnm_read_reg;
+            rnm_read_resp = rnm_read_resp_i[i];
+            rf_en_o[i] = rf_en;
+            rf_preg_o[i] = rf_preg;
+            rf_rdata = rf_rdata_i[i];
+            rf_we_o[i] = rf_we;
+            rf_wdata_o[i] = rf_wdata;
+        end else begin
+            rnm_read_en_o[i] = '0;
+            rnm_read_reg_o[i] = '0;
+            rf_en_o[i] = '0;
+            rf_preg_o[i] = '0;
+            rf_we_o[i] = '0;
+            rf_wdata_o[i] = '0;
+        end
+    end
 end
 
 
