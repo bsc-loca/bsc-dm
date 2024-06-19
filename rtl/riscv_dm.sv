@@ -188,22 +188,22 @@ logic [NUM_HARTS-1:0] sticky_resume_ack;
 assign dmstatus.ndmresetpending = 0;
 assign dmstatus.stickyunavail = 0;
 
-assign dmstatus.allhavereset = &(eff_hart_win_sel & havereset_i);
+assign dmstatus.allhavereset = ~(|(eff_hart_win_sel ^ havereset_i));
 assign dmstatus.anyhavereset = |(eff_hart_win_sel & havereset_i);
 
-assign dmstatus.allresumeack = &(eff_hart_win_sel & sticky_resume_ack);
+assign dmstatus.allresumeack = ~(|(eff_hart_win_sel ^ sticky_resume_ack));
 assign dmstatus.anyresumeack = |(eff_hart_win_sel & sticky_resume_ack);
 
 assign dmstatus.anynonexistent = eff_hart_win_sel != 'h1; // TODO: fix this
 assign dmstatus.allnonexistent = eff_hart_win_sel != 'h1;
 
-assign dmstatus.allunavail = &(eff_hart_win_sel & unavail_i);
+assign dmstatus.allunavail = ~(|(eff_hart_win_sel ^ unavail_i));
 assign dmstatus.anyunavail = |(eff_hart_win_sel & unavail_i);
 
-assign dmstatus.allrunning = &(eff_hart_win_sel & running_i);
+assign dmstatus.allrunning = ~(|(eff_hart_win_sel ^ running_i));
 assign dmstatus.anyrunning = |(eff_hart_win_sel & running_i);
 
-assign dmstatus.allhalted = &(eff_hart_win_sel & halted_i);
+assign dmstatus.allhalted = ~(|(eff_hart_win_sel ^ halted_i));
 assign dmstatus.anyhalted = |(eff_hart_win_sel & halted_i);
 
 assign dmstatus.authenticated = 1;
