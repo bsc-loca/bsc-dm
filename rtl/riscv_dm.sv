@@ -91,16 +91,16 @@ module riscv_dm #(
 
     // Register read abstract command signals
     //! @virtualbus regfilebus @dir in
-    output logic  [NUM_HARTS-1:0]                      rnm_read_en_o   ,    //! Request reading the rename table
-    output logic [NUM_HARTS-1:0][LOGI_REG_BITS-1:0]    rnm_read_reg_o  ,    //! Logical register for which the mapping is read
-    input  logic [NUM_HARTS-1:0][PHYS_REG_BITS-1:0]    rnm_read_resp_i ,    //! Physical register mapped to the requested logical register
+    output logic                        rnm_read_en_o   [NUM_HARTS-1:0],    //! Request reading the rename table
+    output logic [LOGI_REG_BITS-1:0]    rnm_read_reg_o  [NUM_HARTS-1:0],    //! Logical register for which the mapping is read
+    input  logic [PHYS_REG_BITS-1:0]    rnm_read_resp_i [NUM_HARTS-1:0],    //! Physical register mapped to the requested logical register
 
-    output logic  [NUM_HARTS-1:0]                      rf_en_o         ,    //! Read enable for the register file
-    output logic [NUM_HARTS-1:0][PHYS_REG_BITS-1:0]    rf_preg_o       ,    //! Target physical register in the register file
-    input  logic [NUM_HARTS-1:0][XLEN-1:0]             rf_rdata_i      ,    //! Data read from the register file
+    output logic                        rf_en_o         [NUM_HARTS-1:0],    //! Read enable for the register file
+    output logic [PHYS_REG_BITS-1:0]    rf_preg_o       [NUM_HARTS-1:0],    //! Target physical register in the register file
+    input  logic [XLEN-1:0]             rf_rdata_i      [NUM_HARTS-1:0],    //! Data read from the register file
 
-    output logic  [NUM_HARTS-1:0]                      rf_we_o         ,    //! Write enable for the register file
-    output logic [NUM_HARTS-1:0][XLEN-1:0]             rf_wdata_o      ,    //! Data to write to the register file
+    output logic                        rf_we_o         [NUM_HARTS-1:0],    //! Write enable for the register file
+    output logic [XLEN-1:0]             rf_wdata_o      [NUM_HARTS-1:0],    //! Data to write to the register file
     //! @end
 
 
