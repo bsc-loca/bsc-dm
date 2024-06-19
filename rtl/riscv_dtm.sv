@@ -95,7 +95,11 @@ jtag_tap jtag_tap_inst(
     .dtmcs_select_o(dtmcs_select),
     .dmi_select_o(dmi_select),
     .dmi_tdi_i(dmi_tdi),
-    .dtmcs_tdi_i(dtmcs_tdi)
+    .dtmcs_tdi_i(dtmcs_tdi),
+
+    .debug_tdi_i(1'b0),
+    .bs_chain_tdi_i(1'b0),
+    .mbist_tdi_i(1'b0)
 );
 
 typedef enum logic [1:0] {
