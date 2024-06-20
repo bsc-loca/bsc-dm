@@ -77,16 +77,16 @@ module riscv_dm_wrapper #(
 
     // Register read abstract command signals
     //! @virtualbus regfilebus @dir in
-    output logic                        rnm_read_en_o   [NUM_HARTS-1:0],
-    output logic [LOGI_REG_BITS-1:0]    rnm_read_reg_o  [NUM_HARTS-1:0],
-    input  logic [PHYS_REG_BITS-1:0]    rnm_read_resp_i [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]                     rnm_read_en_o,
+    output logic [NUM_HARTS-1:0][LOGI_REG_BITS-1:0]  rnm_read_reg_o,
+    input  logic [NUM_HARTS-1:0][PHYS_REG_BITS-1:0]  rnm_read_resp_i,
 
-    output logic                        rf_en_o         [NUM_HARTS-1:0],
-    output logic [PHYS_REG_BITS-1:0]    rf_preg_o       [NUM_HARTS-1:0],
-    input  logic [XLEN-1:0]             rf_rdata_i      [NUM_HARTS-1:0],
+    output logic [NUM_HARTS-1:0]                     rf_en_o,
+    output logic [NUM_HARTS-1:0][PHYS_REG_BITS-1:0]  rf_preg_o,
+    input  logic [NUM_HARTS-1:0][XLEN-1:0]           rf_rdata_i,
 
-    output logic                        rf_we_o         [NUM_HARTS-1:0],
-    output  logic [XLEN-1:0]            rf_wdata_o      [NUM_HARTS-1:0]
+    output logic [NUM_HARTS-1:0]                     rf_we_o,
+    output logic [NUM_HARTS-1:0][XLEN-1:0]           rf_wdata_o
     //! @end
 );
     logic [ADDR_WIDTH-1:0]      sri_addr;
