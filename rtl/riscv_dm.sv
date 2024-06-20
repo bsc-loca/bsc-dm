@@ -197,7 +197,7 @@ assign dmstatus.anyresumeack = |(eff_hart_win_sel & sticky_resume_ack);
 
 always_comb begin
     dmstatus.anynonexistent = hartsel >= NUM_HARTS;
-    dmstatus.allnonexistent = dmstatus.anynonexistent
+    dmstatus.allnonexistent = dmstatus.anynonexistent;
 end
 
 assign dmstatus.allunavail = ~(|(eff_hart_win_sel ^ unavail_i));
