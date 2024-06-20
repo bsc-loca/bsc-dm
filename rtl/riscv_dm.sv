@@ -33,22 +33,22 @@
 //! a safeguard and as a way of not wasting one word with the ebrea instruction for getting out of debug mode
 
 module riscv_dm #(
-    parameter  integer NUM_HARTS        = 1,                //! Number of harts connected to the Debug Module
-    parameter  integer PROGRAM_SIZE     = 4,                //! program buffer size, in words
-    parameter  integer DATA_SIZE        = 4,                //! data buffer size, in words
-    parameter  integer WORD_SIZE        = 4,                //! word size, in bytes
-    parameter  integer NUM_PHYS_REGS    = 64,               //! Maximum number of physical registers for all the cores
+    parameter  integer unsigned NUM_HARTS        = 1,                //! Number of harts connected to the Debug Module
+    parameter  integer unsigned PROGRAM_SIZE     = 4,                //! program buffer size, in words
+    parameter  integer unsigned DATA_SIZE        = 4,                //! data buffer size, in words
+    parameter  integer unsigned WORD_SIZE        = 4,                //! word size, in bytes
+    parameter  integer unsigned NUM_PHYS_REGS    = 64,               //! Maximum number of physical registers for all the cores
 
-    localparam integer XLEN             = 64,
-    localparam integer PHYS_REG_BITS    = $clog2(NUM_PHYS_REGS),
-    localparam integer NUM_LOGI_REGS    = 32,
-    localparam integer LOGI_REG_BITS    = $clog2(NUM_LOGI_REGS),
+    localparam integer unsigned XLEN             = 64,
+    localparam integer unsigned PHYS_REG_BITS    = $clog2(NUM_PHYS_REGS),
+    localparam integer unsigned NUM_LOGI_REGS    = 32,
+    localparam integer unsigned LOGI_REG_BITS    = $clog2(NUM_LOGI_REGS),
 
-    localparam integer BYTE_SEL_BITS    = $clog2(WORD_SIZE),
-    localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
-    localparam integer BPW              = 8,
-    localparam integer ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
-    localparam integer DATA_WIDTH       = 64 //! Size of the SRI data channel
+    localparam integer unsigned BYTE_SEL_BITS    = $clog2(WORD_SIZE),
+    localparam integer unsigned MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
+    localparam integer unsigned BPW              = 8,
+    localparam integer unsigned ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
+    localparam integer unsigned DATA_WIDTH       = 64 //! Size of the SRI data channel
 ) (
     input   logic                                       clk_i,      //! Clock signal
     input   logic                                       rstn_i,     //! Reset signal (active low)
@@ -126,10 +126,10 @@ logic rf_we;
 logic [XLEN-1:0] rf_wdata;
 
 
-localparam PROGBUF_BEGIN = 0;
-localparam PROGBUF_END = PROGRAM_SIZE - 1;
-localparam DATABUF_BEGIN = PROGRAM_SIZE;
-localparam DATABUF_END =  DATABUF_BEGIN + DATA_SIZE - 1;
+localparam integer unsigned PROGBUF_BEGIN = 0;
+localparam integer unsigned PROGBUF_END = PROGRAM_SIZE - 1;
+localparam integer unsigned DATABUF_BEGIN = PROGRAM_SIZE;
+localparam integer unsigned DATABUF_END =  DATABUF_BEGIN + DATA_SIZE - 1;
 
 
 typedef enum logic [3:0] {
@@ -194,8 +194,11 @@ assign dmstatus.anyhavereset = |(eff_hart_win_sel & havereset_i);
 assign dmstatus.allresumeack = ~(|(eff_hart_win_sel ^ sticky_resume_ack));
 assign dmstatus.anyresumeack = |(eff_hart_win_sel & sticky_resume_ack);
 
-assign dmstatus.anynonexistent = eff_hart_win_sel != 'h1; // TODO: fix this
-assign dmstatus.allnonexistent = eff_hart_win_sel != 'h1;
+
+always_comb begin
+    dmstatus.anynonexistent = hartsel >= NUM_HARTS;
+    dmstatus.allnonexistent = dmstatus.anynonexistent
+end
 
 assign dmstatus.allunavail = ~(|(eff_hart_win_sel ^ unavail_i));
 assign dmstatus.anyunavail = |(eff_hart_win_sel & unavail_i);
@@ -283,6 +286,7 @@ always_comb begin
     resp_valid_o = 0;
     resp_op_o = 0; // err
     clear_ackhavereset = 0;
+    clear_ackunavail = 0;
     prog_data_buf_we = 0;
     dm_state_op_next = IDLE;
     command_next = command;
@@ -301,6 +305,8 @@ always_comb begin
     rf_preg = 'b0;
     rf_wdata = 'b0;
 
+    // DMI signals
+    resp_data_o = 32'd0;
 
     case (dm_state)
         IDLE: begin
@@ -321,7 +327,6 @@ always_comb begin
                 dm_state_next = IDLE;
         end
         READ: begin
-            resp_data_o = 32'hcafebabe;
             case (req_addr_i[6:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     resp_data_o = dmcontrol;
@@ -392,8 +397,8 @@ always_comb begin
             case (req_addr_i[6:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     // individual hartsel handling
-                    if ({dmcontrol_i.hartselhi, dmcontrol_i.hartsello} < 20'(NUM_HARTS)) begin
-                        hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello};
+                    if ({dmcontrol_i.hartselhi, dmcontrol_i.hartsello} > 20'(NUM_HARTS)) begin
+                        hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & ((1<<NUM_HARTS)-1);
                     end
 
                     // haltreq handling, TODO: control groups
@@ -437,7 +442,7 @@ always_comb begin
                 end
                 riscv_dm_pkg::COMMAND: begin
                     // if () begin
-                    if (abstractcs.cmderr == 3'b0 & halted_i[hartsel]) begin
+                    if ((abstractcs.cmderr == 3'b0) & halted_i[hartsel]) begin
                         if (command_i.cmdtype == 8'd0) begin
                             if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
                                 abstract_cmd = 1'b1;
@@ -567,6 +572,8 @@ always_comb begin
 end
 
 always_comb begin: hartsel_mux
+    rf_rdata = '0;
+    rnm_read_resp = '0;
     for (integer i = 0; i < NUM_HARTS; i++) begin
         if (i == hartsel) begin
             rnm_read_en_o[i] = rnm_read_en;
