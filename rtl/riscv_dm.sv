@@ -179,8 +179,6 @@ assign hartinfo.dataaddr = 12'h0;
 // ===== dmstatus register =====
 riscv_dm_pkg::dmstatus_t dmstatus;
 
-logic [NUM_HARTS-1:0] eff_hart_win_sel;
-assign eff_hart_win_sel = hawindowsel | (1'b1 << hartsel);
 
 logic [NUM_HARTS-1:0] sticky_resume_ack;
 
@@ -188,26 +186,23 @@ logic [NUM_HARTS-1:0] sticky_resume_ack;
 assign dmstatus.ndmresetpending = 0;
 assign dmstatus.stickyunavail = 0;
 
-assign dmstatus.allhavereset = ~(|(eff_hart_win_sel ^ havereset_i));
-assign dmstatus.anyhavereset = |(eff_hart_win_sel & havereset_i);
+assign dmstatus.allhavereset = havereset_i[hartsel];
+assign dmstatus.anyhavereset = havereset_i[hartsel];
 
-assign dmstatus.allresumeack = ~(|(eff_hart_win_sel ^ sticky_resume_ack));
-assign dmstatus.anyresumeack = |(eff_hart_win_sel & sticky_resume_ack);
+assign dmstatus.allresumeack = sticky_resume_ack[hartsel];
+assign dmstatus.anyresumeack = sticky_resume_ack[hartsel];
 
+assign dmstatus.anynonexistent = hartsel >= NUM_HARTS;
+assign dmstatus.allnonexistent = hartsel >= NUM_HARTS;
 
-always_comb begin
-    dmstatus.anynonexistent = hartsel >= NUM_HARTS;
-    dmstatus.allnonexistent = dmstatus.anynonexistent;
-end
+assign dmstatus.allunavail = unavail_i[hartsel];
+assign dmstatus.anyunavail = unavail_i[hartsel];
 
-assign dmstatus.allunavail = ~(|(eff_hart_win_sel ^ unavail_i));
-assign dmstatus.anyunavail = |(eff_hart_win_sel & unavail_i);
+assign dmstatus.allrunning = running_i[hartsel];
+assign dmstatus.anyrunning = running_i[hartsel];
 
-assign dmstatus.allrunning = ~(|(eff_hart_win_sel ^ running_i));
-assign dmstatus.anyrunning = |(eff_hart_win_sel & running_i);
-
-assign dmstatus.allhalted = ~(|(eff_hart_win_sel ^ halted_i));
-assign dmstatus.anyhalted = |(eff_hart_win_sel & halted_i);
+assign dmstatus.allhalted = halted_i[hartsel];
+assign dmstatus.anyhalted = halted_i[hartsel];
 
 assign dmstatus.authenticated = 1;
 assign dmstatus.authbusy = 1'b0;
@@ -397,7 +392,9 @@ always_comb begin
             case (req_addr_i[6:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     // individual hartsel handling
-                    if ({dmcontrol_i.hartselhi, dmcontrol_i.hartsello} > 20'(NUM_HARTS)) begin
+                    if (NUM_HARTS == 1) begin
+                        hartsel_next = 0;
+                    end else begin
                         hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & ((1<<NUM_HARTS)-1);
                     end
 
