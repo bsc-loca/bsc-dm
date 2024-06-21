@@ -121,16 +121,13 @@ assign update_dmi = dmi_select & update_dr;
 assign capture_dmi = dmi_select & capture_dr;
 
 assign dmi_tdi = dmi_reg[0];
-always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
+always_ff @( posedge tck_i or posedge trst_i) begin
     if (trst_i) begin
         dmi_reg <= 0;
-        dmi_in <= 0;
     end else begin
-        if (tck_i & shift_dmi) begin
+        if (shift_dmi) begin
             dmi_reg <= {tdo, dmi_reg[riscv_dm_pkg::DMI_WIDTH-1:1]};
-         end else if (~tck_i & update_dmi) begin
-            dmi_in <= dmi_reg;
-        end else if (tck_i & capture_dmi) begin             // latching occurs in falling edge
+        end else if (capture_dmi) begin             // latching occurs in falling edge
             if (dmi_state != DMI_IDLE) begin
                 dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= riscv_dm_pkg::RD_OP_BUSY;
             end else begin
@@ -143,10 +140,20 @@ always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
     end
 end
 
+always_ff @( negedge tck_i or posedge trst_i) begin
+    if (trst_i) begin
+        dmi_in <= 0;
+    end else begin
+        if (update_dmi) begin
+            dmi_in <= dmi_reg;
+        end
+    end
+end
+
 
 // ===== DMI register management =====
 
-always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
+always_ff @( posedge tck_i or posedge trst_i) begin
     if(trst_i | dtmcs_hard_reset) begin
         dmi_state <= DMI_IDLE;
         dmi_op_out <= 0;
@@ -225,13 +232,13 @@ assign update_dtmcs = dtmcs_select & update_dr;
 assign capture_dtmcs = dtmcs_select & capture_dr;
 
 assign dtmcs_tdi = dtmcs_reg[0];
-always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
+always_ff @( posedge tck_i or posedge trst_i) begin
     if (trst_i) begin
         dtmcs_reg <= 32'd0;
     end else begin
         if (tck_i & shift_dtmcs) begin
             dtmcs_reg <= {tdo, dtmcs_reg[riscv_dm_pkg::DTMCS_WIDTH-1:1]};
-        end else if (~tck_i & update_dtmcs) begin
+        // end else if (~tck_i & update_dtmcs) begin
             // nada por ahora
         end else if (tck_i & capture_dtmcs) begin
             dtmcs_reg <= dtmcs_read;
