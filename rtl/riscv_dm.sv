@@ -650,8 +650,13 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         end else begin
             if (sri_we_i & sri_en_i) begin
                 for (integer i = 0; i < BPW; i++) begin
-                    if (sri_be_i[i])
-                        prog_data_buf[buf_addr][i*8+:8] <= sri_wdata_i[i*8+:8];
+                    if (sri_be_i[i]) begin
+                        if (i < BPW/2) begin
+                            prog_data_buf[buf_addr][i*8+:8] <= sri_wdata_i[i*8+:8];
+                        end else begin
+                            prog_data_buf[buf_addr+1][i*8+:8] <= sri_wdata_i[i*8+:8];
+                        end
+                    end
                 end
             end
         end
