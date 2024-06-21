@@ -649,9 +649,13 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
             prog_data_buf <= prog_data_buf_next;
         end else begin
             if (sri_we_i & sri_en_i) begin
-                for (integer i = 0; i < BPW; i++) begin
+                for (integer i = 0; i < 4; i++) begin // lower 32b half
                     if (sri_be_i[i])
                         prog_data_buf[buf_addr][i*8+:8] <= sri_wdata_i[i*8+:8];
+                end
+                for (integer i = 0; i < 4; i++) begin // upper 32b half
+                    if (sri_be_i[i+4])
+                        prog_data_buf[buf_addr+1][i*8+:8] <= sri_wdata_i[(i+4)*8+:8];
                 end
             end
         end
