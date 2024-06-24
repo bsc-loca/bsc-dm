@@ -176,7 +176,7 @@ logic [NUM_HARTS-1:0] sticky_resume_ack, sticky_unavail, sticky_havereset;
 
 // TODO: parametrize
 assign dmstatus.ndmresetpending = 0;
-assign dmstatus.stickyunavail = 0;
+assign dmstatus.stickyunavail = sticky_unavail[hartsel];
 
 assign dmstatus.allhavereset = sticky_havereset[hartsel];
 assign dmstatus.anyhavereset = sticky_havereset[hartsel];
@@ -187,8 +187,8 @@ assign dmstatus.anyresumeack = sticky_resume_ack[hartsel];
 assign dmstatus.anynonexistent = hartsel >= NUM_HARTS;
 assign dmstatus.allnonexistent = hartsel >= NUM_HARTS;
 
-assign dmstatus.allunavail = sticky_unavail;
-assign dmstatus.anyunavail = sticky_unavail;
+assign dmstatus.allunavail = sticky_unavail[hartsel];
+assign dmstatus.anyunavail = sticky_unavail[hartsel];
 
 assign dmstatus.allrunning = running_i[hartsel];
 assign dmstatus.anyrunning = running_i[hartsel];
@@ -247,6 +247,7 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
     if (~rstn_i) begin
         sticky_resume_ack <= '0;
         sticky_havereset <= '0;
+        sticky_unavail <= '0;
     end else begin
         if (dmcontrol.resumereq) begin
             sticky_resume_ack <= '0; // New resume request, clear sticky
