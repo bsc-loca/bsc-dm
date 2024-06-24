@@ -131,9 +131,9 @@ always_ff @( posedge tck_i or posedge trst_i) begin
             if (dmi_state != DMI_IDLE) begin
                 dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= riscv_dm_pkg::RD_OP_BUSY;
             end else begin
-                dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= dmi_op_out_next;
+                dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= dmi_op_out;
+                dmi_reg[riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:2] <= dmi_data_out;
             end
-            dmi_reg[riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:2] <= dmi_data_out_next;
         end else begin
             dmi_reg <= dmi_reg;
         end
@@ -203,17 +203,16 @@ always_comb begin
         end
         DMI_EXEC_WAIT: begin
             resp_ready_o = 1;
-
-            if (capture_dmi) begin
-                dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
-            end
-
             // wait readback from JTAG
             if (resp_valid_i) begin
                 dmi_data_out_next = resp_data_i;
                 if (~dmi_op_out[1]) // only update op if previous value is not sticky
                     dmi_op_out_next = resp_op_i;
                 dmi_state_next = DMI_IDLE;
+            end
+
+            if (capture_dmi) begin
+                dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
             end
         end
         default: ;
