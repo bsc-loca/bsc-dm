@@ -125,7 +125,7 @@ logic [XLEN-1:0] rf_rdata;
 logic rf_we;
 logic [XLEN-1:0] rf_wdata;
 
-
+localparam integer unsigned NUM_HART_BITS = $clog2(NUM_HARTS);
 localparam integer unsigned PROGBUF_BEGIN = 0;
 localparam integer unsigned PROGBUF_END = PROGRAM_SIZE - 1;
 localparam integer unsigned DATABUF_BEGIN = PROGRAM_SIZE;
@@ -186,8 +186,8 @@ logic [NUM_HARTS-1:0] sticky_resume_ack;
 assign dmstatus.ndmresetpending = 0;
 assign dmstatus.stickyunavail = 0;
 
-assign dmstatus.allhavereset = havereset_i[hartsel];
-assign dmstatus.anyhavereset = havereset_i[hartsel];
+assign dmstatus.allhavereset = sticky_havereset[hartsel];
+assign dmstatus.anyhavereset = sticky_havereset[hartsel];
 
 assign dmstatus.allresumeack = sticky_resume_ack[hartsel];
 assign dmstatus.anyresumeack = sticky_resume_ack[hartsel];
@@ -195,8 +195,8 @@ assign dmstatus.anyresumeack = sticky_resume_ack[hartsel];
 assign dmstatus.anynonexistent = hartsel >= NUM_HARTS;
 assign dmstatus.allnonexistent = hartsel >= NUM_HARTS;
 
-assign dmstatus.allunavail = unavail_i[hartsel];
-assign dmstatus.anyunavail = unavail_i[hartsel];
+assign dmstatus.allunavail = sticky_unavail;
+assign dmstatus.anyunavail = sticky_unavail;
 
 assign dmstatus.allrunning = running_i[hartsel];
 assign dmstatus.anyrunning = running_i[hartsel];
@@ -254,12 +254,28 @@ assign halt_on_reset_o = 0;
 always_ff @( posedge clk_i or negedge rstn_i) begin
     if (~rstn_i) begin
         sticky_resume_ack <= '0;
+        sticky_havereset <= '0;
     end else begin
         if (dmcontrol.resumereq) begin
             sticky_resume_ack <= '0; // New resume request, clear sticky
         end else begin
             sticky_resume_ack <= sticky_resume_ack | resume_ack_i;
         end
+
+        // Handle clearing of sticky ackhavereset
+        if (dmcontrol.ackhavereset) begin
+            sticky_havereset <= '0;
+        end else begin
+            sticky_havereset <= sticky_havereset | havereset_i[hartsel];
+        end
+
+        // Handle clearing of sticky ackunavail
+        if (dmcontrol.ackunavail) begin
+            sticky_unavail <= '0;
+        end else begin
+            sticky_unavail <= sticky_unavail | unavail_i[hartsel];
+        end
+
     end
 end
 
@@ -280,8 +296,6 @@ always_comb begin
     req_ready_o = 0;
     resp_valid_o = 0;
     resp_op_o = 0; // err
-    clear_ackhavereset = 0;
-    clear_ackunavail = 0;
     prog_data_buf_we = 0;
     dm_state_op_next = IDLE;
     command_next = command;
@@ -395,7 +409,7 @@ always_comb begin
                     if (NUM_HARTS == 1) begin
                         hartsel_next = 0;
                     end else begin
-                        hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & ((1<<NUM_HARTS)-1);
+                        hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & {{(20-NUM_HART_BITS){1'b0}}, {NUM_HART_BITS{1'b1}}};
                     end
 
                     // haltreq handling, TODO: control groups
@@ -405,17 +419,6 @@ always_comb begin
                     if (~(dmcontrol.haltreq | dmcontrol_i.haltreq)) begin
                         resumereqs_next[hartsel_next] = dmcontrol_i.resumereq;
                     end
-
-                    // ackhavereset handling
-                    if (dmcontrol_i.ackhavereset) begin
-                        clear_ackhavereset = 1;
-                    end
-
-                    // ackunavail handling
-                    if (dmcontrol_i.ackunavail) begin
-                        clear_ackunavail = 1;
-                    end
-
 
                     // hasel handling, TODO: 0 only allowed for now
                     dmcontrol_next.hasel = 0;
@@ -599,6 +602,7 @@ logic [MEMORY_SEL_BITS-1:0] buf_addr;
 assign buf_addr = sri_addr_i[BYTE_SEL_BITS+:MEMORY_SEL_BITS];
 
 
+assign sri_error_o = 1'b0;
 always_comb begin
     if (sri_en_i) begin
         if (buf_addr > (DATABUF_END >> BYTE_SEL_BITS)) begin
@@ -623,7 +627,7 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
 
         // TODO: actual reset values
         hartsel <= '0;
-        abstractcs.cmderr <= 3'b0;
+        abstractcs <= '0;
         haltreqs <= '0;
         resumereqs <= '0;
         prog_data_buf <= '0;
@@ -640,10 +644,6 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
 
         haltreqs <= haltreqs_next;
         resumereqs <= resumereqs_next;
-
-        // handle dmcontrol clear
-        ackhavereset <= ackhavereset_next & ~clear_ackhavereset;
-        ackunavail <= ackunavail_next & ~clear_ackunavail;
 
         if (prog_data_buf_we) begin
             prog_data_buf <= prog_data_buf_next;
