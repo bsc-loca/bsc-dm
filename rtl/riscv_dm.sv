@@ -154,14 +154,6 @@ logic [NUM_HARTS-1:0]   hawindowsel, hawindowsel_next,
 
 logic [19:0] hartsel, hartsel_next;
 
-logic   clear_ackhavereset,
-        clear_ackunavail,
-        ackhavereset,
-        ackhavereset_next,
-        ackunavail,
-        ackunavail_next;
-
-
 assign halt_request_o = haltreqs;
 assign resume_request_o = resumereqs;
 
@@ -180,7 +172,7 @@ assign hartinfo.dataaddr = 12'h0;
 riscv_dm_pkg::dmstatus_t dmstatus;
 
 
-logic [NUM_HARTS-1:0] sticky_resume_ack;
+logic [NUM_HARTS-1:0] sticky_resume_ack, sticky_unavail, sticky_havereset;
 
 // TODO: parametrize
 assign dmstatus.ndmresetpending = 0;
