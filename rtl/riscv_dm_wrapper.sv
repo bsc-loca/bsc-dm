@@ -245,7 +245,7 @@ module riscv_dm_wrapper #(
         .parked_i(parked_i),
 
         .halt_on_reset_o(halt_on_reset_o),
-        .hart_reset_o(),
+        .hart_reset_o(hart_reset_o),
 
         .havereset_i(havereset_i),
         .unavail_i(unavail_i),
