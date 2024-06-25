@@ -157,6 +157,7 @@ always_ff @( posedge tck_i or posedge trst_i) begin
     if(trst_i | dtmcs_hard_reset) begin
         dmi_state <= DMI_IDLE;
         dmi_op_out <= 0;
+        dmi_data_out <= 0;
     end else begin
         dmi_state <= dmi_state_next;
         dmi_data_out <= dmi_data_out_next;

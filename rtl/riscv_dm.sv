@@ -329,7 +329,7 @@ always_comb begin
                 dm_state_next = IDLE;
         end
         READ: begin
-            case (req_addr_i[6:0]) inside
+            case (req_addr_i[5:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     resp_data_o = dmcontrol;
                     resp_op_o = 0;
@@ -396,7 +396,7 @@ always_comb begin
             resp_data_o = 0;
             dm_state_op_next = IDLE;
 
-            case (req_addr_i[6:0]) inside
+            case (req_addr_i[5:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     // individual hartsel handling
                     if (NUM_HARTS == 1) begin
