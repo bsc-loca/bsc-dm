@@ -153,8 +153,12 @@ end
 
 // ===== DMI register management =====
 
-always_ff @( posedge tck_i or posedge trst_i) begin
-    if(trst_i | dtmcs_hard_reset) begin
+always_ff @( posedge tck_i or posedge trst_i or posedge dtmcs_hard_reset) begin
+    if(trst_i) begin
+        dmi_state <= DMI_IDLE;
+        dmi_op_out <= 0;
+        dmi_data_out <= 0;
+    end else if (dtmcs_hard_reset) begin
         dmi_state <= DMI_IDLE;
         dmi_op_out <= 0;
         dmi_data_out <= 0;
@@ -236,11 +240,9 @@ always_ff @( posedge tck_i or posedge trst_i) begin
     if (trst_i) begin
         dtmcs_reg <= 32'd0;
     end else begin
-        if (tck_i & shift_dtmcs) begin
+        if (shift_dtmcs) begin
             dtmcs_reg <= {tdo, dtmcs_reg[riscv_dm_pkg::DTMCS_WIDTH-1:1]};
-        // end else if (~tck_i & update_dtmcs) begin
-            // nada por ahora
-        end else if (tck_i & capture_dtmcs) begin
+        end else if (capture_dtmcs) begin
             dtmcs_reg <= dtmcs_read;
         end
     end
