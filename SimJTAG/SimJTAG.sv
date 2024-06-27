@@ -6,8 +6,8 @@ import "DPI-C" function int jtag_tick
  output bit jtag_TMS,
  output bit jtag_TDI,
  output bit jtag_TRSTn,
- 
- input bit  jtag_TDO
+ input bit  jtag_TDO,
+ input int unsigned jtag_port
 );
 
 module SimJTAG #(
@@ -43,11 +43,12 @@ module SimJTAG #(
    wire         #0.1 __jtag_TDO = jtag_TDO_driven ? 
                 jtag_TDO_data : random_bits[0];
       
-   bit          __jtag_TCK;
-   bit          __jtag_TMS;
-   bit          __jtag_TDI;
-   bit          __jtag_TRSTn;
-   int          __exit;
+   bit           __jtag_TCK;
+   bit           __jtag_TMS;
+   bit           __jtag_TDI;
+   bit           __jtag_TRSTn;
+   int           __exit;
+   int unsigned  __jtag_port;
 
    reg          init_done_sticky;
    
@@ -57,6 +58,8 @@ module SimJTAG #(
    assign #0.1 jtag_TRSTn = __jtag_TRSTn;
    
    assign #0.1 exit = __exit;
+
+   initial if (!$value$plusargs("jtag=%d", __jtag_port)) __jtag_port = 44589;
 
    always @(posedge clock) begin
       r_reset <= reset;
@@ -75,7 +78,8 @@ module SimJTAG #(
                                   __jtag_TMS,
                                   __jtag_TDI,
                                   __jtag_TRSTn,
-                                  __jtag_TDO);
+                                  __jtag_TDO,
+                                  __jtag_port);
             end
          end // if (enable && init_done_sticky)
       end // else: !if(reset || r_reset)
