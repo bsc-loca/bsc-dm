@@ -216,7 +216,7 @@ always_comb begin
                 dmi_state_next = DMI_IDLE;
             end
 
-            if (capture_dmi) begin
+            if (~dmi_op_out[1] & capture_dmi) begin
                 dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
             end
         end
