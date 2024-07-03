@@ -214,13 +214,20 @@ riscv_dm_pkg::dmcontrol_t   dmcontrol_i,
 riscv_dm_pkg::abstractcs_t  abstractcs_i,
                             abstractcs,
                             abstractcs_next;
+
 riscv_dm_pkg::command_t     command_i,
                             command,
                             command_next;
 
+riscv_dm_pkg::abstractauto_t    abstractauto_i,
+                                abstractauto,
+                                abstractauto_next;
+
+
 assign abstractcs_i = req_data_i;
 assign command_i    = req_data_i;
 assign dmcontrol_i  = req_data_i;
+assign abstractauto_i  = req_data_i;
 
 
 // read only regs
@@ -272,6 +279,13 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
     end
 end
 
+logic [3:0] autodata_idx;
+logic autodata_exec;
+
+
+assign autodata_idx = req_addr_i[3:0] - 4'd4;
+assign autodata_exec = abstractauto.autoexecdata[autodata_idx];
+
 always_comb begin
     hartsel_next = hartsel;
     dm_state_next = dm_state;
@@ -286,6 +300,7 @@ always_comb begin
     dmcontrol_next.setresethaltreq = 0;
     dmcontrol_next.clrresethaltreq = 0;
     abstractcs_next.cmderr = abstractcs.cmderr;
+    abstractauto_next = abstractauto;
     req_ready_o = 0;
     resp_valid_o = 0;
     resp_op_o = 0; // err
@@ -357,6 +372,11 @@ always_comb begin
                 end
                 riscv_dm_pkg::ABSTRACTCS: begin
                     resp_data_o = abstractcs;
+                    resp_op_o = 0;
+                    resp_valid_o = 1;
+                end
+                riscv_dm_pkg::ABSTRACTAUTO: begin
+                    resp_data_o = abstractauto;
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
@@ -434,7 +454,6 @@ always_comb begin
                     resp_valid_o = 1;
                 end
                 riscv_dm_pkg::COMMAND: begin
-                    // if () begin
                     if ((abstractcs.cmderr == 3'b0) & halted_i[hartsel]) begin
                         if (command_i.cmdtype == 8'd0) begin
                             if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
@@ -456,6 +475,12 @@ always_comb begin
                         resp_valid_o = 1;
                     end
                 end
+                riscv_dm_pkg::ABSTRACTAUTO: begin
+                    abstractauto_next.autoexecdata = {{(12-DATA_SIZE){1'b0}},abstractauto_i.autoexecdata[DATA_SIZE-1:0]};
+                    abstractauto_next.autoexecprogbuf = {{(16-PROGRAM_SIZE){1'b0}},abstractauto_i.autoexecprogbuf[PROGRAM_SIZE-1:0]};
+                    resp_op_o = 0;
+                    resp_valid_o = 1;
+                end
                 riscv_dm_pkg::ABSTRACTCS: begin
                     abstractcs_next.cmderr = abstractcs.cmderr & ~abstractcs_i.cmderr; // busy
                     resp_op_o = 0;
@@ -472,14 +497,23 @@ always_comb begin
                 [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA11]: begin
                     prog_data_buf_we = 1;
                     prog_data_buf_next[req_addr_i[4:0]] = req_data_i;
-                    resp_op_o = 0;
-                    resp_valid_o = 1;
+                    if (abstractauto.autoexecdata[autodata_idx]) begin
+                        abstract_cmd = 1;
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end else begin
+                        resp_op_o = 0;
+                        resp_valid_o = 1;
+                    end
                 end
                 [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF15]: begin
                     prog_data_buf_next[req_addr_i[4:0]] = req_data_i;
                     prog_data_buf_we = 1;
-                    resp_op_o = 0;
-                    resp_valid_o = 1;
+                    if (abstractauto.autoexecprogbuf[req_addr_i[4:0]]) begin
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end else begin
+                        resp_op_o = 0;
+                        resp_valid_o = 1;
+                    end
                 end
                 riscv_dm_pkg::SBCS: begin
                     resp_op_o = 2'b10;  // DMI error
@@ -493,7 +527,7 @@ always_comb begin
 
             if (resp_ready_i && ~abstract_cmd) begin
                 dm_state_next = IDLE;
-            end else if (resp_ready_i && abstract_cmd) begin
+            end else if (abstract_cmd) begin
                 dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
             end
         end
@@ -621,6 +655,7 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         // TODO: actual reset values
         hartsel <= '0;
         abstractcs <= '0;
+        abstractauto <= '0;
         haltreqs <= '0;
         resumereqs <= '0;
         prog_data_buf <= '0;
@@ -634,6 +669,7 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         hartsel <= hartsel_next;
 
         abstractcs <= abstractcs_next;
+        abstractauto <= abstractauto_next;
 
         haltreqs <= haltreqs_next;
         resumereqs <= resumereqs_next;
