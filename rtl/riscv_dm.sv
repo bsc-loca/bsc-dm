@@ -392,11 +392,19 @@ always_comb begin
                     resp_data_o = prog_data_buf[req_addr_i[4:0]];
                     resp_op_o = 0;
                     resp_valid_o = 1;
+                    if (abstractauto.autoexecdata[autodata_idx]) begin
+                        abstract_cmd = 1;
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end
                 end
                 [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF0+PROGRAM_SIZE-1]: begin
                     resp_data_o = prog_data_buf[req_addr_i[4:0]];
                     resp_op_o = 0;
                     resp_valid_o = 1;
+                    if (abstractauto.autoexecdata[autodata_idx]) begin
+                        abstract_cmd = 1;
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end
                 end
                 riscv_dm_pkg::SBCS: begin
                     resp_data_o = 32'd0;
@@ -409,8 +417,11 @@ always_comb begin
                 end
             endcase
 
-            if (resp_ready_i)
+            if (resp_ready_i && ~abstract_cmd) begin
                 dm_state_next = IDLE;
+            end else if (abstract_cmd) begin
+                dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+            end
         end
         WRITE: begin
             resp_data_o = 0;
