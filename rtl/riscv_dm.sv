@@ -150,13 +150,15 @@ dm_state_t  dm_state,
 logic [NUM_HARTS-1:0]   hawindowsel, hawindowsel_next,
                         hawindow, hawindow_next,
                         resumereqs, resumereqs_next,
-                        haltreqs, haltreqs_next;
+                        haltreqs, haltreqs_next,
+                        hartresets, hartresets_next;
 
 logic [19:0] hartsel, hartsel_next;
 
 assign halt_request_o = haltreqs;
 assign resume_request_o = resumereqs;
-
+assign hart_reset_o = hartresets;
+assign halt_on_reset_o = 0;
 
 // ===== hartinfo register =====
 
@@ -244,12 +246,6 @@ logic prog_data_buf_we;
 logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf_next;
 
 logic abstract_cmd;
-
-
-// tie some unused signals for now
-assign hart_reset_o = 0;
-assign halt_on_reset_o = 0;
-
 always_ff @( posedge clk_i or negedge rstn_i) begin
     if (~rstn_i) begin
         sticky_resume_ack <= '0;
@@ -438,6 +434,9 @@ always_comb begin
 
                     // haltreq handling, TODO: control groups
                     haltreqs_next[hartsel_next] = dmcontrol_i.haltreq;
+
+                    // hart reset handling, TODO: control groups
+                    hartresets_next[hartsel_next] = dmcontrol_i.hartreset;
 
                     // resumereq handling, TODO: control groups
                     if (~(dmcontrol.haltreq | dmcontrol_i.haltreq)) begin
