@@ -178,33 +178,33 @@ logic [NUM_HARTS-1:0] sticky_resume_ack, sticky_unavail, sticky_havereset;
 
 // TODO: parametrize
 assign dmstatus.ndmresetpending = 0;
-assign dmstatus.stickyunavail = sticky_unavail[hartsel];
+assign dmstatus.stickyunavail   = sticky_unavail[hartsel];
 
-assign dmstatus.allhavereset = sticky_havereset[hartsel];
-assign dmstatus.anyhavereset = sticky_havereset[hartsel];
+assign dmstatus.allhavereset    = sticky_havereset[hartsel];
+assign dmstatus.anyhavereset    = sticky_havereset[hartsel];
 
-assign dmstatus.allresumeack = sticky_resume_ack[hartsel];
-assign dmstatus.anyresumeack = sticky_resume_ack[hartsel];
+assign dmstatus.allresumeack    = sticky_resume_ack[hartsel];
+assign dmstatus.anyresumeack    = sticky_resume_ack[hartsel];
 
-assign dmstatus.anynonexistent = hartsel >= NUM_HARTS;
-assign dmstatus.allnonexistent = hartsel >= NUM_HARTS;
+assign dmstatus.anynonexistent   = hartsel >= NUM_HARTS;
+assign dmstatus.allnonexistent  = hartsel >= NUM_HARTS;
 
-assign dmstatus.allunavail = sticky_unavail[hartsel];
-assign dmstatus.anyunavail = sticky_unavail[hartsel];
+assign dmstatus.allunavail      = sticky_unavail[hartsel];
+assign dmstatus.anyunavail      = sticky_unavail[hartsel];
 
-assign dmstatus.allrunning = running_i[hartsel];
-assign dmstatus.anyrunning = running_i[hartsel];
+assign dmstatus.allrunning      = running_i[hartsel];
+assign dmstatus.anyrunning      = running_i[hartsel];
 
-assign dmstatus.allhalted = halted_i[hartsel];
-assign dmstatus.anyhalted = halted_i[hartsel];
+assign dmstatus.allhalted       = halted_i[hartsel];
+assign dmstatus.anyhalted       = halted_i[hartsel];
 
-assign dmstatus.authenticated = 1;
-assign dmstatus.authbusy = 1'b0;
+assign dmstatus.authenticated   = 1;
+assign dmstatus.authbusy        = 1'b0;
 
-assign dmstatus.impebreak = 1'b0;
+assign dmstatus.impebreak       = 1'b0;
 assign dmstatus.hasresethaltreq = 1'b0; // TODO: implement if we have time
 assign dmstatus.confstrptrvalid = 0;
-assign dmstatus.version = 4'd3;
+assign dmstatus.version         = 4'd3;
 
 
 
@@ -225,14 +225,14 @@ riscv_dm_pkg::abstractauto_t    abstractauto_i,
                                 abstractauto,
                                 abstractauto_next;
 
+// Req data casting
+assign abstractcs_i     = req_data_i;
+assign command_i        = req_data_i;
+assign dmcontrol_i      = req_data_i;
+assign abstractauto_i   = req_data_i;
 
-assign abstractcs_i = req_data_i;
-assign command_i    = req_data_i;
-assign dmcontrol_i  = req_data_i;
-assign abstractauto_i  = req_data_i;
 
-
-// read only regs
+// Abstractcs read only regs
 assign abstractcs_next.progbufsize = 5'(PROGRAM_SIZE);
 assign abstractcs_next.busy = 0;
 assign abstractcs_next.relaxedpriv = 1;
