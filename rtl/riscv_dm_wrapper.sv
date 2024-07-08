@@ -170,9 +170,9 @@ module riscv_dm_wrapper #(
         .resp_op_i(resp_op_cdc)
     );
 
-    cdc_fifo_gray_clearable #(
-        .WIDTH(riscv_dm_pkg::DMI_ADDR_WIDTH+riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH)
-    ) req_cdc_fifo (
+    cdc_2phase_clearable #(
+        .T(logic [riscv_dm_pkg::DMI_ADDR_WIDTH+riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:0])
+    ) req_cdc (
         .src_rst_ni(~trst_i),
         .src_clk_i(tck_i),
         .src_clear_i(0),
@@ -190,9 +190,9 @@ module riscv_dm_wrapper #(
         .dst_ready_i(req_ready_cdc)
     );
 
-    cdc_fifo_gray_clearable #(
-        .WIDTH(riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH)
-    ) resp_cdc_fifo (
+    cdc_2phase_clearable #(
+        .WIDTH(logic [riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:0])
+    ) resp_cdc (
         .src_rst_ni(rstn_i),
         .src_clk_i(clk_i),
         .src_clear_i(0),
