@@ -80,6 +80,7 @@ module riscv_dm #(
 
     output logic [NUM_HARTS-1:0]   progbuf_run_req_o,
     input  logic [NUM_HARTS-1:0]   progbuf_run_ack_i,
+    input  logic [NUM_HARTS-1:0]   progbuf_xcpt_i,
     input  logic [NUM_HARTS-1:0]   parked_i,
 
     output logic [NUM_HARTS-1:0]   halt_on_reset_o,
@@ -464,25 +465,27 @@ always_comb begin
                     resp_valid_o = 1;
                 end
                 riscv_dm_pkg::COMMAND: begin
-                    if ((abstractcs.cmderr == 3'b0) & halted_i[hartsel]) begin
-                        if (command_i.cmdtype == 8'd0) begin
-                            if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
-                                abstract_cmd = 1'b1;
-                                command_next = command_i;
+                    if (abstractcs.cmderr == 3'b0) begin    // only allow executing a command if there wasn't a previous error
+                        if (halted_i[hartsel]) begin
+                            if (command_i.cmdtype == 8'd0) begin
+                                if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
+                                    abstract_cmd = 1'b1;
+                                    command_next = command_i;
+                                end else begin
+                                    abstractcs_next.cmderr = 3'd2; // not supported
+                                    resp_op_o = 0;
+                                    resp_valid_o = 1;
+                                end
                             end else begin
                                 abstractcs_next.cmderr = 3'd2; // not supported
                                 resp_op_o = 0;
                                 resp_valid_o = 1;
                             end
                         end else begin
-                            abstractcs_next.cmderr = 3'd2; // not supported
+                            abstractcs_next.cmderr = 3'h4;
                             resp_op_o = 0;
                             resp_valid_o = 1;
                         end
-                    end else if (~halted_i[hartsel]) begin
-                        abstractcs_next.cmderr = 3'h4;
-                        resp_op_o = 0;
-                        resp_valid_o = 1;
                     end
                 end
                 riscv_dm_pkg::ABSTRACTAUTO: begin
@@ -492,7 +495,7 @@ always_comb begin
                     resp_valid_o = 1;
                 end
                 riscv_dm_pkg::ABSTRACTCS: begin
-                    abstractcs_next.cmderr = abstractcs.cmderr & ~abstractcs_i.cmderr; // busy
+                    abstractcs_next.cmderr = abstractcs.cmderr & ~abstractcs_i.cmderr; // handle cmderr clearing
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
@@ -599,6 +602,10 @@ always_comb begin
         end
         EXEC_PROGBUF_WAIT_EBREAK: begin // wait for the core to finish executing the program buffer and run ebreak
             if (parked_i[hartsel]) begin
+                // check whether there was an exception when running the program buffer
+                if (progbuf_xcpt_i[hartsel]) begin
+                    abstractcs_next.cmderr = 3'd3; // set cmderr accordingly
+                end
                 resp_op_o = 0;
                 resp_valid_o = 1;
                 dm_state_next = IDLE;
@@ -662,7 +669,6 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
 
         command <= 0;
 
-        // TODO: actual reset values
         hartsel <= '0;
         abstractcs <= '0;
         abstractauto <= '0;
