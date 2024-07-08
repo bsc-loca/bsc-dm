@@ -191,7 +191,7 @@ module riscv_dm_wrapper #(
     );
 
     cdc_2phase_clearable #(
-        .WIDTH(logic [riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:0])
+        .T(logic [riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:0])
     ) resp_cdc (
         .src_rst_ni(rstn_i),
         .src_clk_i(clk_i),
