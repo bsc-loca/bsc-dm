@@ -210,8 +210,6 @@ module riscv_dm_wrapper #(
         .dst_ready_i(resp_ready_cdc)
     );
 
-    logic halt_request, resume_request, halted, resumeack;
-
     riscv_dm #(
         .NUM_HARTS(NUM_HARTS),
         .PROGRAM_SIZE(PROGRAM_SIZE),

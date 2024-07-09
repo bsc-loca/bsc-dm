@@ -62,13 +62,9 @@ logic dtmcs_select, dmi_select;
 
 // dtm signals
 
-riscv_dm_pkg::dmi_t dmi_in, dmi_latched;
+riscv_dm_pkg::dmi_t dmi_in;
 
 logic dmi_tdi, dtmcs_tdi;
-
-logic [riscv_dm_pkg::DMI_ADDR_WIDTH-1:0]  dmi_addr_in;
-logic [riscv_dm_pkg::DMI_DATA_WIDTH-1:0]  dmi_data_in;
-logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]    dmi_op_in;
 
 logic dtmcs_clear_sticky, dtmcs_hard_reset;
 
