@@ -152,14 +152,15 @@ logic [NUM_HARTS-1:0]   hawindowsel, hawindowsel_next,
                         hawindow, hawindow_next,
                         resumereqs, resumereqs_next,
                         haltreqs, haltreqs_next,
+                        resethaltreqs, resethaltreqs_next,
                         hartresets, hartresets_next;
 
 logic [19:0] hartsel, hartsel_next;
 
 assign halt_request_o = haltreqs;
 assign resume_request_o = resumereqs;
-assign hart_reset_o = hartresets;
-assign halt_on_reset_o = 0;
+assign hart_reset_o = {NUM_HARTS{dmcontrol.ndmreset}} | hartresets;
+assign halt_on_reset_o = resethaltreqs;
 
 // ===== hartinfo register =====
 
@@ -203,7 +204,7 @@ assign dmstatus.authenticated   = 1;
 assign dmstatus.authbusy        = 1'b0;
 
 assign dmstatus.impebreak       = 1'b0;
-assign dmstatus.hasresethaltreq = 1'b0; // TODO: implement if we have time
+assign dmstatus.hasresethaltreq = 1'b1;
 assign dmstatus.confstrptrvalid = 0;
 assign dmstatus.version         = 4'd3;
 
@@ -294,8 +295,6 @@ always_comb begin
     dmcontrol_next.hartsello = 0;
     dmcontrol_next.setkeepalive = 0;
     dmcontrol_next.clrkeepalive = 0;
-    dmcontrol_next.setresethaltreq = 0;
-    dmcontrol_next.clrresethaltreq = 0;
     abstractcs_next.cmderr = abstractcs.cmderr;
     abstractauto_next = abstractauto;
     req_ready_o = 0;
@@ -309,6 +308,8 @@ always_comb begin
     progbuf_run_req_o = 'b0;
     resumereqs_next = resumereqs & ~resume_ack_i; // Clear ack'd requests
     haltreqs_next = haltreqs;
+    hartresets_next = hartresets;
+    resethaltreqs_next = resethaltreqs;
 
     // rnm defaults
     rnm_read_en = 'b0;
@@ -443,6 +444,9 @@ always_comb begin
                     if (~(dmcontrol.haltreq | dmcontrol_i.haltreq)) begin
                         resumereqs_next[hartsel_next] = dmcontrol_i.resumereq;
                     end
+
+                    // reset halt handling
+                    resethaltreqs_next[hartsel_next] = dmcontrol_i.clrresethaltreq ? 1'b0 : (resethaltreqs[hartsel_next] | dmcontrol_i.setresethaltreq);
 
                     // hasel handling, TODO: 0 only allowed for now
                     dmcontrol_next.hasel = 0;
@@ -675,6 +679,8 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         haltreqs <= '0;
         resumereqs <= '0;
         prog_data_buf <= '0;
+        hartresets <= '0;
+        resethaltreqs <= '0;
     end else begin
         dmcontrol <= dmcontrol_next;
         dm_state <= dm_state_next;
@@ -689,6 +695,8 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
 
         haltreqs <= haltreqs_next;
         resumereqs <= resumereqs_next;
+        hartresets <= hartresets_next;
+        resethaltreqs <= resethaltreqs_next;
 
         if (prog_data_buf_we) begin
             prog_data_buf <= prog_data_buf_next;
