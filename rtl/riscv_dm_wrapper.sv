@@ -22,29 +22,13 @@ module riscv_dm_wrapper #(
     input logic                             clk_i,
     input logic                             rstn_i,
 
-    // AXI ports
-    input  logic [AXI_ADDR_WIDTH-1:0]       m_awaddr_i, //! Write address
-    input  logic                            m_awvalid_i,//! Write address valid
-    output logic                            m_awready_o,//! Write address ready
-
-    input  logic [    AXI_DATA_WIDTH-1:0]   m_wdata_i,  //! Write data
-    input  logic                            m_wvalid_i, //! Write data valid
-    input  logic [(AXI_DATA_WIDTH/8)-1:0]   m_wstrb_i,  //! Write data ready
-    output logic [                   0:0]   m_wready_o, //! Write data ready
-
-    output logic [1:0]                      m_bresp_o,  //! Write response status
-    output logic                            m_bvalid_o, //! Write response valid
-    input  logic                            m_bready_i, //! Write response ready
-
-    input  logic [AXI_ADDR_WIDTH-1:0]       m_araddr_i, //! Read address
-    input  logic                            m_arvalid_i,//! Read address valid
-    output logic                            m_arready_o,//! Read address ready
-
-    output logic [               1:0]       m_rresp_o,  //! Read response status
-    output logic [AXI_DATA_WIDTH-1:0]       m_rdata_o,  //! Read response data
-    output logic                            m_rvalid_o, //! Read response valid
-    input  logic                            m_rready_i, //! Read response ready
-
+    input  logic [ADDR_WIDTH-1:0]           sri_addr_i,
+    input  logic                            sri_en_i,
+    input  logic                            sri_we_i,
+    input  logic [DATA_WIDTH-1:0]           sri_wdata_i,
+    input  logic [(DATA_WIDTH/8)-1:0]       sri_be_i,
+    output logic [DATA_WIDTH-1:0]           sri_rdata_o,
+    output logic                            sri_error_o,
 
     // JTAG ports
     input   logic                           tms_i,
@@ -89,47 +73,6 @@ module riscv_dm_wrapper #(
     output logic [NUM_HARTS-1:0][XLEN-1:0]           rf_wdata_o
     //! @end
 );
-    logic [ADDR_WIDTH-1:0]      sri_addr;
-    logic                       sri_en, sri_we, sri_error;
-    logic [DATA_WIDTH-1:0]      sri_wdata;
-    logic [DATA_WIDTH-1:0]      sri_rdata;
-    logic [(DATA_WIDTH/8)-1:0]  sri_be;
-
-    axilite_to_sri #(
-        .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
-        .AXI_DATA_WIDTH(AXI_DATA_WIDTH),
-        .SRI_ADDR_WIDTH(ADDR_WIDTH),
-        .SRI_DATA_WIDTH(DATA_WIDTH)
-    ) axilite_to_sri_inst (
-        .clk_i(clk_i),
-        .rstn_i(rstn_i),
-
-        .m_awaddr_i(m_awaddr_i),
-        .m_awvalid_i(m_awvalid_i),
-        .m_awready_o(m_awready_o),
-        .m_wdata_i(m_wdata_i),
-        .m_wvalid_i(m_wvalid_i),
-        .m_wstrb_i(m_wstrb_i),
-        .m_wready_o(m_wready_o),
-        .m_bresp_o(m_bresp_o),
-        .m_bvalid_o(m_bvalid_o),
-        .m_bready_i(m_bready_i),
-        .m_araddr_i(m_araddr_i),
-        .m_arvalid_i(m_arvalid_i),
-        .m_arready_o(m_arready_o),
-        .m_rdata_o(m_rdata_o),
-        .m_rvalid_o(m_rvalid_o),
-        .m_rready_i(m_rready_i),
-
-        .sri_addr_o(sri_addr),
-        .sri_en_o(sri_en),
-        .sri_wdata_o(sri_wdata),
-        .sri_we_o(sri_we),
-        .sri_be_o(sri_be),
-        .sri_rdata_i(sri_rdata),
-        .sri_error_i(sri_error)
-    );
-
     logic                                       req_valid;
     logic                                       req_ready;
     logic [riscv_dm_pkg::DMI_ADDR_WIDTH-1:0]    req_addr;
