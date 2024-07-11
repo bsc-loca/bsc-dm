@@ -50,6 +50,7 @@ module riscv_dm_wrapper #(
 
     output logic [NUM_HARTS-1:0]   progbuf_run_req_o,
     input  logic [NUM_HARTS-1:0]   progbuf_run_ack_i,
+    input  logic [NUM_HARTS-1:0]   progbuf_xcpt_i,
     input  logic [NUM_HARTS-1:0]   parked_i,
 
     output logic [NUM_HARTS-1:0]   halt_on_reset_o,
@@ -183,6 +184,7 @@ module riscv_dm_wrapper #(
 
         .progbuf_run_req_o  (progbuf_run_req_o),
         .progbuf_run_ack_i  (progbuf_run_ack_i),
+        .progbuf_xcpt_i     (progbuf_xcpt_i),
         .parked_i           (parked_i),
 
         .halt_on_reset_o    (halt_on_reset_o),
