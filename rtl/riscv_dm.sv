@@ -295,6 +295,7 @@ always_comb begin
     dmcontrol_next.hartsello = 0;
     dmcontrol_next.setkeepalive = 0;
     dmcontrol_next.clrkeepalive = 0;
+    dmcontrol_next.ndmreset = dmcontrol.ndmreset;
     abstractcs_next.cmderr = abstractcs.cmderr;
     abstractauto_next = abstractauto;
     req_ready_o = 0;
@@ -452,6 +453,7 @@ always_comb begin
                     dmcontrol_next.hasel = 0;
 
                     dmcontrol_next.dmactive = dmcontrol_i.dmactive;
+                    dmcontrol_next.ndmreset = dmcontrol_i.ndmreset;
 
                     resp_op_o = 0;
                     resp_valid_o = 1;
