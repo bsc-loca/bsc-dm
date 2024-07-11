@@ -5,7 +5,7 @@ module riscv_dm_wrapper #(
     parameter  integer WORD_SIZE        = 4,                //! word size, in bytes
     parameter  integer NUM_PHYS_REGS    = 64,               //! Maximum number of physical registers for all the cores
 
-    parameter  integer AXI_ADDR_WIDTH   = 20,
+    parameter  integer AXI_ADDR_WIDTH   = 64,
     parameter  integer AXI_DATA_WIDTH   = 64,
 
     localparam integer XLEN             = 64,
@@ -16,7 +16,7 @@ module riscv_dm_wrapper #(
     localparam integer BYTE_SEL_BITS    = $clog2(WORD_SIZE),
     localparam integer MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
     localparam integer BPW              = 8,
-    localparam integer ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
+    localparam integer ADDR_WIDTH       = 64,
     localparam integer DATA_WIDTH       = 64 //! Size of the SRI data channel
 )(
     input logic                             clk_i,

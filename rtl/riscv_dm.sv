@@ -47,7 +47,7 @@ module riscv_dm #(
     localparam integer unsigned BYTE_SEL_BITS    = $clog2(WORD_SIZE),
     localparam integer unsigned MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
     localparam integer unsigned BPW              = 8,
-    localparam integer unsigned ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
+    localparam integer unsigned ADDR_WIDTH       = 64,
     localparam integer unsigned DATA_WIDTH       = 64 //! Size of the SRI data channel
 ) (
     input   logic                                       clk_i,      //! Clock signal
