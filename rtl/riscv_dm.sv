@@ -602,6 +602,7 @@ always_comb begin
             end
         end
         EXEC_PROGBUF_WAIT_START: begin  // wait for the core to receive the request of executing the program buffer
+            progbuf_run_req_o[hartsel] = 1'b1;
             if (progbuf_run_ack_i[hartsel]) begin
                 dm_state_next = EXEC_PROGBUF_WAIT_EBREAK;
             end
