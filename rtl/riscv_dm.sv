@@ -176,7 +176,9 @@ assign hartinfo.dataaddr = 12'h0;
 riscv_dm_pkg::dmstatus_t dmstatus;
 
 
-logic [NUM_HARTS-1:0] sticky_resume_ack, sticky_unavail, sticky_havereset;
+logic [NUM_HARTS-1:0]   sticky_resume_ack,  sticky_resume_ack_next,
+                        sticky_unavail,     sticky_unavail_next,
+                        sticky_havereset,   sticky_havereset_next;
 
 // TODO: parametrize
 assign dmstatus.ndmresetpending = 0;
@@ -240,7 +242,6 @@ assign abstractcs_next.busy = 0;
 assign abstractcs_next.relaxedpriv = 1;
 assign abstractcs_next.datacount = 4'(DATA_SIZE);
 
-
 assign rnm_read_reg = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
 
 // ===== program buffer register =====
@@ -248,34 +249,6 @@ logic prog_data_buf_we;
 logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf_next;
 
 logic abstract_cmd;
-always_ff @( posedge clk_i or negedge rstn_i) begin
-    if (~rstn_i) begin
-        sticky_resume_ack <= '0;
-        sticky_havereset <= '0;
-        sticky_unavail <= '0;
-    end else begin
-        if (dmcontrol.resumereq) begin
-            sticky_resume_ack <= '0; // New resume request, clear sticky
-        end else begin
-            sticky_resume_ack <= sticky_resume_ack | resume_ack_i;
-        end
-
-        // Handle clearing of sticky ackhavereset
-        if (dmcontrol.ackhavereset) begin
-            sticky_havereset <= '0;
-        end else begin
-            sticky_havereset <= sticky_havereset | havereset_i[hartsel];
-        end
-
-        // Handle clearing of sticky ackunavail
-        if (dmcontrol.ackunavail) begin
-            sticky_unavail <= '0;
-        end else begin
-            sticky_unavail <= sticky_unavail | unavail_i[hartsel];
-        end
-
-    end
-end
 
 logic [3:0] autodata_idx;
 logic autodata_exec;
@@ -288,6 +261,7 @@ always_comb begin
     hartsel_next = hartsel;
     dm_state_next = dm_state;
     dmcontrol_next = dmcontrol;
+    dmcontrol_next.hasel = 0;   // TODO: 0 only allowed for now
     dmcontrol_next.resumereq = 0;
     dmcontrol_next.ackhavereset = 0;
     dmcontrol_next.ackunavail = 0;
@@ -311,6 +285,11 @@ always_comb begin
     haltreqs_next = haltreqs;
     hartresets_next = hartresets;
     resethaltreqs_next = resethaltreqs;
+
+    // sticky bits
+    sticky_resume_ack_next = sticky_resume_ack | resume_ack_i;
+    sticky_havereset_next = sticky_havereset | havereset_i;
+    sticky_unavail_next = sticky_unavail | unavail_i;
 
     // rnm defaults
     rnm_read_en = 'b0;
@@ -429,11 +408,7 @@ always_comb begin
             case (req_addr_i[5:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     // individual hartsel handling
-                    if (NUM_HARTS == 1) begin
-                        hartsel_next = 0;
-                    end else begin
-                        hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & {{(20-NUM_HART_BITS){1'b0}}, {NUM_HART_BITS{1'b1}}};
-                    end
+                    hartsel_next = (NUM_HARTS == 1) ? 0 : {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & {{(20-NUM_HART_BITS){1'b0}}, {NUM_HART_BITS{1'b1}}};
 
                     // haltreq handling, TODO: control groups
                     haltreqs_next[hartsel_next] = dmcontrol_i.haltreq;
@@ -449,11 +424,23 @@ always_comb begin
                     // reset halt handling
                     resethaltreqs_next[hartsel_next] = dmcontrol_i.clrresethaltreq ? 1'b0 : (resethaltreqs[hartsel_next] | dmcontrol_i.setresethaltreq);
 
-                    // hasel handling, TODO: 0 only allowed for now
-                    dmcontrol_next.hasel = 0;
-
                     dmcontrol_next.dmactive = dmcontrol_i.dmactive;
                     dmcontrol_next.ndmreset = dmcontrol_i.ndmreset;
+
+                    //sticky bit clearing
+                    if (dmcontrol_i.resumereq) begin
+                        sticky_resume_ack_next[hartsel_next] = 1'b0;
+                    end
+
+                    // Handle clearing of sticky ackhavereset
+                    if (dmcontrol_i.ackhavereset) begin
+                        sticky_havereset_next[hartsel_next] = 1'b0;
+                    end
+
+                    // Handle clearing of sticky ackunavail
+                    if (dmcontrol_i.ackunavail) begin
+                        sticky_unavail_next[hartsel_next] = 1'b0;
+                    end
 
                     resp_op_o = 0;
                     resp_valid_o = 1;
@@ -684,6 +671,9 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         prog_data_buf <= '0;
         hartresets <= '0;
         resethaltreqs <= '0;
+        sticky_havereset <= '0;
+        sticky_resume_ack <= '0;
+        sticky_unavail <= '0;
     end else begin
         dmcontrol <= dmcontrol_next;
         dm_state <= dm_state_next;
@@ -700,6 +690,10 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         resumereqs <= resumereqs_next;
         hartresets <= hartresets_next;
         resethaltreqs <= resethaltreqs_next;
+
+        sticky_havereset <= sticky_havereset_next;
+        sticky_resume_ack <= sticky_resume_ack_next;
+        sticky_unavail <= sticky_unavail_next;
 
         if (prog_data_buf_we) begin
             prog_data_buf <= prog_data_buf_next;
