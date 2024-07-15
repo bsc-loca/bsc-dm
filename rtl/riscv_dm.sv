@@ -148,9 +148,7 @@ dm_state_t  dm_state,
             dm_state_next,
             dm_state_op_next;
 
-logic [NUM_HARTS-1:0]   hawindowsel, hawindowsel_next,
-                        hawindow, hawindow_next,
-                        resumereqs, resumereqs_next,
+logic [NUM_HARTS-1:0]   resumereqs, resumereqs_next,
                         haltreqs, haltreqs_next,
                         resethaltreqs, resethaltreqs_next,
                         hartresets, hartresets_next;
@@ -166,6 +164,8 @@ assign halt_on_reset_o = resethaltreqs;
 
 riscv_dm_pkg::hartinfo_t    hartinfo;
 
+assign hartinfo._pad1 = '0;
+assign hartinfo._pad2 = '0;
 assign hartinfo.nscratch = 4'd0;
 assign hartinfo.dataaccess = 1'b1;  // memory-mapped data regs
 assign hartinfo.datasize = 4'(DATA_SIZE);
@@ -181,6 +181,9 @@ logic [NUM_HARTS-1:0]   sticky_resume_ack,  sticky_resume_ack_next,
                         sticky_havereset,   sticky_havereset_next;
 
 // TODO: parametrize
+assign dmstatus._pad1 = '0;
+assign dmstatus._pad2 = '0;
+
 assign dmstatus.ndmresetpending = 0;
 assign dmstatus.stickyunavail   = sticky_unavail[hartsel];
 
@@ -235,8 +238,10 @@ assign command_i        = req_data_i;
 assign dmcontrol_i      = req_data_i;
 assign abstractauto_i   = req_data_i;
 
-
 // Abstractcs read only regs
+assign abstractcs_next._pad1 = 0;
+assign abstractcs_next._pad2 = 0;
+assign abstractcs_next._pad3 = 0;
 assign abstractcs_next.progbufsize = 5'(PROGRAM_SIZE);
 assign abstractcs_next.busy = 0;
 assign abstractcs_next.relaxedpriv = 1;
