@@ -62,13 +62,9 @@ logic dtmcs_select, dmi_select;
 
 // dtm signals
 
-riscv_dm_pkg::dmi_t dmi_in, dmi_latched;
+riscv_dm_pkg::dmi_t dmi_in;
 
 logic dmi_tdi, dtmcs_tdi;
-
-logic [riscv_dm_pkg::DMI_ADDR_WIDTH-1:0]  dmi_addr_in;
-logic [riscv_dm_pkg::DMI_DATA_WIDTH-1:0]  dmi_data_in;
-logic [riscv_dm_pkg::DMI_OP_WIDTH-1:0]    dmi_op_in;
 
 logic dtmcs_clear_sticky, dtmcs_hard_reset;
 
@@ -121,24 +117,31 @@ assign update_dmi = dmi_select & update_dr;
 assign capture_dmi = dmi_select & capture_dr;
 
 assign dmi_tdi = dmi_reg[0];
-always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
+always_ff @( posedge tck_i or posedge trst_i) begin
     if (trst_i) begin
         dmi_reg <= 0;
-        dmi_in <= 0;
     end else begin
-        if (tck_i & shift_dmi) begin
+        if (shift_dmi) begin
             dmi_reg <= {tdo, dmi_reg[riscv_dm_pkg::DMI_WIDTH-1:1]};
-         end else if (~tck_i & update_dmi) begin
-            dmi_in <= dmi_reg;
-        end else if (tck_i & capture_dmi) begin             // latching occurs in falling edge
+        end else if (capture_dmi) begin             // latching occurs in falling edge
             if (dmi_state != DMI_IDLE) begin
                 dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= riscv_dm_pkg::RD_OP_BUSY;
             end else begin
-                dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= dmi_op_out_next;
+                dmi_reg[riscv_dm_pkg::DMI_OP_WIDTH-1:0]                              <= dmi_op_out;
+                dmi_reg[riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:2] <= dmi_data_out;
             end
-            dmi_reg[riscv_dm_pkg::DMI_DATA_WIDTH+riscv_dm_pkg::DMI_OP_WIDTH-1:2] <= dmi_data_out_next;
         end else begin
             dmi_reg <= dmi_reg;
+        end
+    end
+end
+
+always_ff @( negedge tck_i or posedge trst_i) begin
+    if (trst_i) begin
+        dmi_in <= 0;
+    end else begin
+        if (update_dmi) begin
+            dmi_in <= dmi_reg;
         end
     end
 end
@@ -146,10 +149,15 @@ end
 
 // ===== DMI register management =====
 
-always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
-    if(trst_i | dtmcs_hard_reset) begin
+always_ff @( posedge tck_i or posedge trst_i or posedge dtmcs_hard_reset) begin
+    if(trst_i) begin
         dmi_state <= DMI_IDLE;
         dmi_op_out <= 0;
+        dmi_data_out <= 0;
+    end else if (dtmcs_hard_reset) begin
+        dmi_state <= DMI_IDLE;
+        dmi_op_out <= 0;
+        dmi_data_out <= 0;
     end else begin
         dmi_state <= dmi_state_next;
         dmi_data_out <= dmi_data_out_next;
@@ -196,17 +204,16 @@ always_comb begin
         end
         DMI_EXEC_WAIT: begin
             resp_ready_o = 1;
-
-            if (capture_dmi) begin
-                dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
-            end
-
             // wait readback from JTAG
             if (resp_valid_i) begin
                 dmi_data_out_next = resp_data_i;
                 if (~dmi_op_out[1]) // only update op if previous value is not sticky
                     dmi_op_out_next = resp_op_i;
                 dmi_state_next = DMI_IDLE;
+            end
+
+            if (~dmi_op_out[1] & capture_dmi) begin
+                dmi_op_out_next = riscv_dm_pkg::RD_OP_BUSY;
             end
         end
         default: ;
@@ -225,15 +232,13 @@ assign update_dtmcs = dtmcs_select & update_dr;
 assign capture_dtmcs = dtmcs_select & capture_dr;
 
 assign dtmcs_tdi = dtmcs_reg[0];
-always_ff @( posedge tck_i or negedge tck_i or posedge trst_i) begin
+always_ff @( posedge tck_i or posedge trst_i) begin
     if (trst_i) begin
         dtmcs_reg <= 32'd0;
     end else begin
-        if (tck_i & shift_dtmcs) begin
+        if (shift_dtmcs) begin
             dtmcs_reg <= {tdo, dtmcs_reg[riscv_dm_pkg::DTMCS_WIDTH-1:1]};
-        end else if (~tck_i & update_dtmcs) begin
-            // nada por ahora
-        end else if (tck_i & capture_dtmcs) begin
+        end else if (capture_dtmcs) begin
             dtmcs_reg <= dtmcs_read;
         end
     end

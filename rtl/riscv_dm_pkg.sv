@@ -130,19 +130,27 @@ package riscv_dm_pkg;
 
 
     typedef enum logic[6:0] {
-        DATA0       = 7'h04,
-        DATA11      = 7'h0c,
-        DMCONTROL   = 7'h10,
-        DMSTATUS    = 7'h11,
-        HARTINFO    = 7'h12,
-        HAWINDOWSEL = 7'h14,
-        HAWINDOW    = 7'h15,
-        ABSTRACTCS  = 7'h16,
-        COMMAND     = 7'h17,
-        NEXTDM      = 7'h1d,
-        PROGBUF0    = 7'h20,
-        PROGBUF15   = 7'h2f,
-        DMCS2       = 7'h32,
-        SBCS        = 7'h38
+        DATA0        = 7'h04,
+        DATA11       = 7'h0c,
+        DMCONTROL    = 7'h10,
+        DMSTATUS     = 7'h11,
+        HARTINFO     = 7'h12,
+        HAWINDOWSEL  = 7'h14,
+        HAWINDOW     = 7'h15,
+        ABSTRACTCS   = 7'h16,
+        COMMAND      = 7'h17,
+        ABSTRACTAUTO = 7'h18,
+        NEXTDM       = 7'h1d,
+        PROGBUF0     = 7'h20,
+        PROGBUF15    = 7'h2f,
+        DMCS2        = 7'h32,
+        SBCS         = 7'h38
     } dm_reg_t;
+
+    typedef struct packed {
+        logic [15:0] autoexecprogbuf;
+        logic [3:0] _pad1;
+        logic [11:0] autoexecdata;
+    } abstractauto_t;
+
 endpackage

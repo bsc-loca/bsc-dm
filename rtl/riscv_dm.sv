@@ -47,7 +47,7 @@ module riscv_dm #(
     localparam integer unsigned BYTE_SEL_BITS    = $clog2(WORD_SIZE),
     localparam integer unsigned MEMORY_SEL_BITS  = $clog2(PROGRAM_SIZE + DATA_SIZE + 1),
     localparam integer unsigned BPW              = 8,
-    localparam integer unsigned ADDR_WIDTH       = MEMORY_SEL_BITS + BYTE_SEL_BITS,
+    localparam integer unsigned ADDR_WIDTH       = 64,
     localparam integer unsigned DATA_WIDTH       = 64 //! Size of the SRI data channel
 ) (
     input   logic                                       clk_i,      //! Clock signal
@@ -80,6 +80,7 @@ module riscv_dm #(
 
     output logic [NUM_HARTS-1:0]   progbuf_run_req_o,
     input  logic [NUM_HARTS-1:0]   progbuf_run_ack_i,
+    input  logic [NUM_HARTS-1:0]   progbuf_xcpt_i,
     input  logic [NUM_HARTS-1:0]   parked_i,
 
     output logic [NUM_HARTS-1:0]   halt_on_reset_o,
@@ -125,7 +126,7 @@ logic [XLEN-1:0] rf_rdata;
 logic rf_we;
 logic [XLEN-1:0] rf_wdata;
 
-
+localparam integer unsigned NUM_HART_BITS = $clog2(NUM_HARTS);
 localparam integer unsigned PROGBUF_BEGIN = 0;
 localparam integer unsigned PROGBUF_END = PROGRAM_SIZE - 1;
 localparam integer unsigned DATABUF_BEGIN = PROGRAM_SIZE;
@@ -147,29 +148,24 @@ dm_state_t  dm_state,
             dm_state_next,
             dm_state_op_next;
 
-logic [NUM_HARTS-1:0]   hawindowsel, hawindowsel_next,
-                        hawindow, hawindow_next,
-                        resumereqs, resumereqs_next,
-                        haltreqs, haltreqs_next;
+logic [NUM_HARTS-1:0]   resumereqs, resumereqs_next,
+                        haltreqs, haltreqs_next,
+                        resethaltreqs, resethaltreqs_next,
+                        hartresets, hartresets_next;
 
 logic [19:0] hartsel, hartsel_next;
 
-logic   clear_ackhavereset,
-        clear_ackunavail,
-        ackhavereset,
-        ackhavereset_next,
-        ackunavail,
-        ackunavail_next;
-
-
 assign halt_request_o = haltreqs;
 assign resume_request_o = resumereqs;
-
+assign hart_reset_o = {NUM_HARTS{dmcontrol.ndmreset}} | hartresets;
+assign halt_on_reset_o = resethaltreqs;
 
 // ===== hartinfo register =====
 
 riscv_dm_pkg::hartinfo_t    hartinfo;
 
+assign hartinfo._pad1 = '0;
+assign hartinfo._pad2 = '0;
 assign hartinfo.nscratch = 4'd0;
 assign hartinfo.dataaccess = 1'b1;  // memory-mapped data regs
 assign hartinfo.datasize = 4'(DATA_SIZE);
@@ -180,37 +176,42 @@ assign hartinfo.dataaddr = 12'h0;
 riscv_dm_pkg::dmstatus_t dmstatus;
 
 
-logic [NUM_HARTS-1:0] sticky_resume_ack;
+logic [NUM_HARTS-1:0]   sticky_resume_ack,  sticky_resume_ack_next,
+                        sticky_unavail,     sticky_unavail_next,
+                        sticky_havereset,   sticky_havereset_next;
 
 // TODO: parametrize
+assign dmstatus._pad1 = '0;
+assign dmstatus._pad2 = '0;
+
 assign dmstatus.ndmresetpending = 0;
-assign dmstatus.stickyunavail = 0;
+assign dmstatus.stickyunavail   = sticky_unavail[hartsel];
 
-assign dmstatus.allhavereset = havereset_i[hartsel];
-assign dmstatus.anyhavereset = havereset_i[hartsel];
+assign dmstatus.allhavereset    = sticky_havereset[hartsel];
+assign dmstatus.anyhavereset    = sticky_havereset[hartsel];
 
-assign dmstatus.allresumeack = sticky_resume_ack[hartsel];
-assign dmstatus.anyresumeack = sticky_resume_ack[hartsel];
+assign dmstatus.allresumeack    = sticky_resume_ack[hartsel];
+assign dmstatus.anyresumeack    = sticky_resume_ack[hartsel];
 
-assign dmstatus.anynonexistent = hartsel >= NUM_HARTS;
-assign dmstatus.allnonexistent = hartsel >= NUM_HARTS;
+assign dmstatus.anynonexistent   = hartsel >= NUM_HARTS;
+assign dmstatus.allnonexistent  = hartsel >= NUM_HARTS;
 
-assign dmstatus.allunavail = unavail_i[hartsel];
-assign dmstatus.anyunavail = unavail_i[hartsel];
+assign dmstatus.allunavail      = sticky_unavail[hartsel];
+assign dmstatus.anyunavail      = sticky_unavail[hartsel];
 
-assign dmstatus.allrunning = running_i[hartsel];
-assign dmstatus.anyrunning = running_i[hartsel];
+assign dmstatus.allrunning      = running_i[hartsel];
+assign dmstatus.anyrunning      = running_i[hartsel];
 
-assign dmstatus.allhalted = halted_i[hartsel];
-assign dmstatus.anyhalted = halted_i[hartsel];
+assign dmstatus.allhalted       = halted_i[hartsel];
+assign dmstatus.anyhalted       = halted_i[hartsel];
 
-assign dmstatus.authenticated = 1;
-assign dmstatus.authbusy = 1'b0;
+assign dmstatus.authenticated   = 1;
+assign dmstatus.authbusy        = 1'b0;
 
-assign dmstatus.impebreak = 1'b0;
-assign dmstatus.hasresethaltreq = 1'b0; // TODO: implement if we have time
+assign dmstatus.impebreak       = 1'b0;
+assign dmstatus.hasresethaltreq = 1'b1;
 assign dmstatus.confstrptrvalid = 0;
-assign dmstatus.version = 4'd3;
+assign dmstatus.version         = 4'd3;
 
 
 
@@ -222,21 +223,29 @@ riscv_dm_pkg::dmcontrol_t   dmcontrol_i,
 riscv_dm_pkg::abstractcs_t  abstractcs_i,
                             abstractcs,
                             abstractcs_next;
+
 riscv_dm_pkg::command_t     command_i,
                             command,
                             command_next;
 
-assign abstractcs_i = req_data_i;
-assign command_i    = req_data_i;
-assign dmcontrol_i  = req_data_i;
+riscv_dm_pkg::abstractauto_t    abstractauto_i,
+                                abstractauto,
+                                abstractauto_next;
 
+// Req data casting
+assign abstractcs_i     = req_data_i;
+assign command_i        = req_data_i;
+assign dmcontrol_i      = req_data_i;
+assign abstractauto_i   = req_data_i;
 
-// read only regs
+// Abstractcs read only regs
+assign abstractcs_next._pad1 = 0;
+assign abstractcs_next._pad2 = 0;
+assign abstractcs_next._pad3 = 0;
 assign abstractcs_next.progbufsize = 5'(PROGRAM_SIZE);
 assign abstractcs_next.busy = 0;
 assign abstractcs_next.relaxedpriv = 1;
 assign abstractcs_next.datacount = 4'(DATA_SIZE);
-
 
 assign rnm_read_reg = command.control.regno[LOGI_REG_BITS-1:0]; //extract register bits
 
@@ -246,27 +255,18 @@ logic [PROGRAM_SIZE+DATA_SIZE-1:0][WORD_SIZE*8-1:0] prog_data_buf, prog_data_buf
 
 logic abstract_cmd;
 
+logic [3:0] autodata_idx;
+logic autodata_exec;
 
-// tie some unused signals for now
-assign hart_reset_o = 0;
-assign halt_on_reset_o = 0;
 
-always_ff @( posedge clk_i or negedge rstn_i) begin
-    if (~rstn_i) begin
-        sticky_resume_ack <= '0;
-    end else begin
-        if (dmcontrol.resumereq) begin
-            sticky_resume_ack <= '0; // New resume request, clear sticky
-        end else begin
-            sticky_resume_ack <= sticky_resume_ack | resume_ack_i;
-        end
-    end
-end
+assign autodata_idx = req_addr_i[3:0] - 4'd4;
+assign autodata_exec = abstractauto.autoexecdata[autodata_idx];
 
 always_comb begin
     hartsel_next = hartsel;
     dm_state_next = dm_state;
     dmcontrol_next = dmcontrol;
+    dmcontrol_next.hasel = 0;   // TODO: 0 only allowed for now
     dmcontrol_next.resumereq = 0;
     dmcontrol_next.ackhavereset = 0;
     dmcontrol_next.ackunavail = 0;
@@ -274,14 +274,12 @@ always_comb begin
     dmcontrol_next.hartsello = 0;
     dmcontrol_next.setkeepalive = 0;
     dmcontrol_next.clrkeepalive = 0;
-    dmcontrol_next.setresethaltreq = 0;
-    dmcontrol_next.clrresethaltreq = 0;
+    dmcontrol_next.ndmreset = dmcontrol.ndmreset;
     abstractcs_next.cmderr = abstractcs.cmderr;
+    abstractauto_next = abstractauto;
     req_ready_o = 0;
     resp_valid_o = 0;
     resp_op_o = 0; // err
-    clear_ackhavereset = 0;
-    clear_ackunavail = 0;
     prog_data_buf_we = 0;
     dm_state_op_next = IDLE;
     command_next = command;
@@ -290,6 +288,13 @@ always_comb begin
     progbuf_run_req_o = 'b0;
     resumereqs_next = resumereqs & ~resume_ack_i; // Clear ack'd requests
     haltreqs_next = haltreqs;
+    hartresets_next = hartresets;
+    resethaltreqs_next = resethaltreqs;
+
+    // sticky bits
+    sticky_resume_ack_next = sticky_resume_ack | resume_ack_i;
+    sticky_havereset_next = sticky_havereset | havereset_i;
+    sticky_unavail_next = sticky_unavail | unavail_i;
 
     // rnm defaults
     rnm_read_en = 'b0;
@@ -322,7 +327,7 @@ always_comb begin
                 dm_state_next = IDLE;
         end
         READ: begin
-            case (req_addr_i[6:0]) inside
+            case (req_addr_i[5:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     resp_data_o = dmcontrol;
                     resp_op_o = 0;
@@ -353,6 +358,11 @@ always_comb begin
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
+                riscv_dm_pkg::ABSTRACTAUTO: begin
+                    resp_data_o = abstractauto;
+                    resp_op_o = 0;
+                    resp_valid_o = 1;
+                end
                 riscv_dm_pkg::HAWINDOWSEL: begin // TODO: not implemented (WARL)
                     resp_op_o = 0;
                     resp_valid_o = 1;
@@ -365,11 +375,19 @@ always_comb begin
                     resp_data_o = prog_data_buf[req_addr_i[4:0]];
                     resp_op_o = 0;
                     resp_valid_o = 1;
+                    if (abstractauto.autoexecdata[autodata_idx]) begin
+                        abstract_cmd = 1;
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end
                 end
                 [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF0+PROGRAM_SIZE-1]: begin
                     resp_data_o = prog_data_buf[req_addr_i[4:0]];
                     resp_op_o = 0;
                     resp_valid_o = 1;
+                    if (abstractauto.autoexecdata[autodata_idx]) begin
+                        abstract_cmd = 1;
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end
                 end
                 riscv_dm_pkg::SBCS: begin
                     resp_data_o = 32'd0;
@@ -382,45 +400,52 @@ always_comb begin
                 end
             endcase
 
-            if (resp_ready_i)
+            if (resp_ready_i && ~abstract_cmd) begin
                 dm_state_next = IDLE;
+            end else if (abstract_cmd) begin
+                dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+            end
         end
         WRITE: begin
             resp_data_o = 0;
             dm_state_op_next = IDLE;
 
-            case (req_addr_i[6:0]) inside
+            case (req_addr_i[5:0]) inside
                 riscv_dm_pkg::DMCONTROL: begin
                     // individual hartsel handling
-                    if (NUM_HARTS == 1) begin
-                        hartsel_next = 0;
-                    end else begin
-                        hartsel_next = {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & ((1<<NUM_HARTS)-1);
-                    end
+                    hartsel_next = (NUM_HARTS == 1) ? 0 : {dmcontrol_i.hartselhi, dmcontrol_i.hartsello} & {{(20-NUM_HART_BITS){1'b0}}, {NUM_HART_BITS{1'b1}}};
 
                     // haltreq handling, TODO: control groups
                     haltreqs_next[hartsel_next] = dmcontrol_i.haltreq;
+
+                    // hart reset handling, TODO: control groups
+                    hartresets_next[hartsel_next] = dmcontrol_i.hartreset;
 
                     // resumereq handling, TODO: control groups
                     if (~(dmcontrol.haltreq | dmcontrol_i.haltreq)) begin
                         resumereqs_next[hartsel_next] = dmcontrol_i.resumereq;
                     end
 
-                    // ackhavereset handling
-                    if (dmcontrol_i.ackhavereset) begin
-                        clear_ackhavereset = 1;
-                    end
-
-                    // ackunavail handling
-                    if (dmcontrol_i.ackunavail) begin
-                        clear_ackunavail = 1;
-                    end
-
-
-                    // hasel handling, TODO: 0 only allowed for now
-                    dmcontrol_next.hasel = 0;
+                    // reset halt handling
+                    resethaltreqs_next[hartsel_next] = dmcontrol_i.clrresethaltreq ? 1'b0 : (resethaltreqs[hartsel_next] | dmcontrol_i.setresethaltreq);
 
                     dmcontrol_next.dmactive = dmcontrol_i.dmactive;
+                    dmcontrol_next.ndmreset = dmcontrol_i.ndmreset;
+
+                    //sticky bit clearing
+                    if (dmcontrol_i.resumereq) begin
+                        sticky_resume_ack_next[hartsel_next] = 1'b0;
+                    end
+
+                    // Handle clearing of sticky ackhavereset
+                    if (dmcontrol_i.ackhavereset) begin
+                        sticky_havereset_next[hartsel_next] = 1'b0;
+                    end
+
+                    // Handle clearing of sticky ackunavail
+                    if (dmcontrol_i.ackunavail) begin
+                        sticky_unavail_next[hartsel_next] = 1'b0;
+                    end
 
                     resp_op_o = 0;
                     resp_valid_o = 1;
@@ -438,30 +463,37 @@ always_comb begin
                     resp_valid_o = 1;
                 end
                 riscv_dm_pkg::COMMAND: begin
-                    // if () begin
-                    if ((abstractcs.cmderr == 3'b0) & halted_i[hartsel]) begin
-                        if (command_i.cmdtype == 8'd0) begin
-                            if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
-                                abstract_cmd = 1'b1;
-                                command_next = command_i;
+                    if (abstractcs.cmderr == 3'b0) begin    // only allow executing a command if there wasn't a previous error
+                        if (halted_i[hartsel]) begin
+                            if (command_i.cmdtype == 8'd0) begin
+                                if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
+                                    abstract_cmd = 1'b1;
+                                    command_next = command_i;
+                                end else begin
+                                    abstractcs_next.cmderr = 3'd2; // not supported
+                                    resp_op_o = 0;
+                                    resp_valid_o = 1;
+                                end
                             end else begin
                                 abstractcs_next.cmderr = 3'd2; // not supported
                                 resp_op_o = 0;
                                 resp_valid_o = 1;
                             end
                         end else begin
-                            abstractcs_next.cmderr = 3'd2; // not supported
+                            abstractcs_next.cmderr = 3'h4;
                             resp_op_o = 0;
                             resp_valid_o = 1;
                         end
-                    end else if (~halted_i[hartsel]) begin
-                        abstractcs_next.cmderr = 3'h4;
-                        resp_op_o = 0;
-                        resp_valid_o = 1;
                     end
                 end
+                riscv_dm_pkg::ABSTRACTAUTO: begin
+                    abstractauto_next.autoexecdata = {{(12-DATA_SIZE){1'b0}},abstractauto_i.autoexecdata[DATA_SIZE-1:0]};
+                    abstractauto_next.autoexecprogbuf = {{(16-PROGRAM_SIZE){1'b0}},abstractauto_i.autoexecprogbuf[PROGRAM_SIZE-1:0]};
+                    resp_op_o = 0;
+                    resp_valid_o = 1;
+                end
                 riscv_dm_pkg::ABSTRACTCS: begin
-                    abstractcs_next.cmderr = abstractcs.cmderr & ~abstractcs_i.cmderr; // busy
+                    abstractcs_next.cmderr = abstractcs.cmderr & ~abstractcs_i.cmderr; // handle cmderr clearing
                     resp_op_o = 0;
                     resp_valid_o = 1;
                 end
@@ -476,14 +508,23 @@ always_comb begin
                 [riscv_dm_pkg::DATA0:riscv_dm_pkg::DATA11]: begin
                     prog_data_buf_we = 1;
                     prog_data_buf_next[req_addr_i[4:0]] = req_data_i;
-                    resp_op_o = 0;
-                    resp_valid_o = 1;
+                    if (abstractauto.autoexecdata[autodata_idx]) begin
+                        abstract_cmd = 1;
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end else begin
+                        resp_op_o = 0;
+                        resp_valid_o = 1;
+                    end
                 end
                 [riscv_dm_pkg::PROGBUF0:riscv_dm_pkg::PROGBUF15]: begin
                     prog_data_buf_next[req_addr_i[4:0]] = req_data_i;
                     prog_data_buf_we = 1;
-                    resp_op_o = 0;
-                    resp_valid_o = 1;
+                    if (abstractauto.autoexecprogbuf[req_addr_i[4:0]]) begin
+                        dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
+                    end else begin
+                        resp_op_o = 0;
+                        resp_valid_o = 1;
+                    end
                 end
                 riscv_dm_pkg::SBCS: begin
                     resp_op_o = 2'b10;  // DMI error
@@ -497,7 +538,7 @@ always_comb begin
 
             if (resp_ready_i && ~abstract_cmd) begin
                 dm_state_next = IDLE;
-            end else if (resp_ready_i && abstract_cmd) begin
+            end else if (abstract_cmd) begin
                 dm_state_next = ABSTRACT_CMD_REG_READ_RENAME;
             end
         end
@@ -553,12 +594,17 @@ always_comb begin
             end
         end
         EXEC_PROGBUF_WAIT_START: begin  // wait for the core to receive the request of executing the program buffer
+            progbuf_run_req_o[hartsel] = 1'b1;
             if (progbuf_run_ack_i[hartsel]) begin
                 dm_state_next = EXEC_PROGBUF_WAIT_EBREAK;
             end
         end
         EXEC_PROGBUF_WAIT_EBREAK: begin // wait for the core to finish executing the program buffer and run ebreak
             if (parked_i[hartsel]) begin
+                // check whether there was an exception when running the program buffer
+                if (progbuf_xcpt_i[hartsel]) begin
+                    abstractcs_next.cmderr = 3'd3; // set cmderr accordingly
+                end
                 resp_op_o = 0;
                 resp_valid_o = 1;
                 dm_state_next = IDLE;
@@ -599,6 +645,7 @@ logic [MEMORY_SEL_BITS-1:0] buf_addr;
 assign buf_addr = sri_addr_i[BYTE_SEL_BITS+:MEMORY_SEL_BITS];
 
 
+assign sri_error_o = 1'b0;
 always_comb begin
     if (sri_en_i) begin
         if (buf_addr > (DATABUF_END >> BYTE_SEL_BITS)) begin
@@ -621,12 +668,17 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
 
         command <= 0;
 
-        // TODO: actual reset values
         hartsel <= '0;
-        abstractcs.cmderr <= 3'b0;
+        abstractcs <= '0;
+        abstractauto <= '0;
         haltreqs <= '0;
         resumereqs <= '0;
         prog_data_buf <= '0;
+        hartresets <= '0;
+        resethaltreqs <= '0;
+        sticky_havereset <= '0;
+        sticky_resume_ack <= '0;
+        sticky_unavail <= '0;
     end else begin
         dmcontrol <= dmcontrol_next;
         dm_state <= dm_state_next;
@@ -637,21 +689,28 @@ always_ff @( posedge clk_i or negedge rstn_i) begin
         hartsel <= hartsel_next;
 
         abstractcs <= abstractcs_next;
+        abstractauto <= abstractauto_next;
 
         haltreqs <= haltreqs_next;
         resumereqs <= resumereqs_next;
+        hartresets <= hartresets_next;
+        resethaltreqs <= resethaltreqs_next;
 
-        // handle dmcontrol clear
-        ackhavereset <= ackhavereset_next & ~clear_ackhavereset;
-        ackunavail <= ackunavail_next & ~clear_ackunavail;
+        sticky_havereset <= sticky_havereset_next;
+        sticky_resume_ack <= sticky_resume_ack_next;
+        sticky_unavail <= sticky_unavail_next;
 
         if (prog_data_buf_we) begin
             prog_data_buf <= prog_data_buf_next;
         end else begin
             if (sri_we_i & sri_en_i) begin
-                for (integer i = 0; i < BPW; i++) begin
+                for (integer i = 0; i < 4; i++) begin // lower 32b half
                     if (sri_be_i[i])
                         prog_data_buf[buf_addr][i*8+:8] <= sri_wdata_i[i*8+:8];
+                end
+                for (integer i = 0; i < 4; i++) begin // upper 32b half
+                    if (sri_be_i[i+4])
+                        prog_data_buf[buf_addr+1][i*8+:8] <= sri_wdata_i[(i+4)*8+:8];
                 end
             end
         end
