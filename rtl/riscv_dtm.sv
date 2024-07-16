@@ -89,14 +89,19 @@ jtag_tap jtag_tap_inst(
     .update_dr_o(update_dr),
     .capture_dr_o(capture_dr),
 
+    // Select signals for boundary scan or mbist
+    .extest_select_o(),
+    .sample_preload_select_o(),
+    .mbist_select_o(),
+    .debug_select_o(),
     .dtmcs_select_o(dtmcs_select),
     .dmi_select_o(dmi_select),
-    .dmi_tdi_i(dmi_tdi),
-    .dtmcs_tdi_i(dtmcs_tdi),
 
     .debug_tdi_i(1'b0),
     .bs_chain_tdi_i(1'b0),
     .mbist_tdi_i(1'b0),
+    .dtmcs_tdi_i(dtmcs_tdi),
+    .dmi_tdi_i(dmi_tdi),
 
     .idcode_i(idcode_i)
 );
