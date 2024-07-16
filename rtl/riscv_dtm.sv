@@ -39,6 +39,7 @@ module riscv_dtm(
     input   logic tdi_i,
     output  logic tdo_o,
     output  logic tdo_driven_o,
+    input   logic [31:0] idcode_i,
 
 
     output  logic                       req_valid_o,
@@ -95,7 +96,9 @@ jtag_tap jtag_tap_inst(
 
     .debug_tdi_i(1'b0),
     .bs_chain_tdi_i(1'b0),
-    .mbist_tdi_i(1'b0)
+    .mbist_tdi_i(1'b0),
+
+    .idcode_i(idcode_i)
 );
 
 typedef enum logic [1:0] {
