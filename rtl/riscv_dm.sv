@@ -185,7 +185,8 @@ assign dmstatus._pad1 = '0;
 assign dmstatus._pad2 = '0;
 
 assign dmstatus.ndmresetpending = 0;
-assign dmstatus.stickyunavail   = sticky_unavail[hartsel];
+assign dmstatus.stickyunavail   = 1'b1;
+assign dmstatus.impebreak       = 1'b0;
 
 assign dmstatus.allhavereset    = sticky_havereset[hartsel];
 assign dmstatus.anyhavereset    = sticky_havereset[hartsel];
@@ -208,7 +209,6 @@ assign dmstatus.anyhalted       = halted_i[hartsel];
 assign dmstatus.authenticated   = 1;
 assign dmstatus.authbusy        = 1'b0;
 
-assign dmstatus.impebreak       = 1'b0;
 assign dmstatus.hasresethaltreq = 1'b1;
 assign dmstatus.confstrptrvalid = 0;
 assign dmstatus.version         = 4'd3;
