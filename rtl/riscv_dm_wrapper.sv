@@ -38,6 +38,8 @@ module riscv_dm_wrapper #(
     output  logic                           tdo_o,
     output  logic                           tdo_driven_o,
 
+    input   logic [31:0]                    idcode_i,
+
     //TODO: replace all buses with structs/interfaces
     // Hart run control signals
     //! @virtualbus hartctl @dir in
@@ -101,6 +103,7 @@ module riscv_dm_wrapper #(
         .tdi_i          (tdi_i),
         .tdo_o          (tdo_o),
         .tdo_driven_o   (tdo_driven_o),
+        .idcode_i       (idcode_i),
 
         .req_valid_o    (req_valid),
         .req_ready_i    (req_ready),

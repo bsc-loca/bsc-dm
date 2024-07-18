@@ -128,7 +128,9 @@ module jtag_tap(
                 bs_chain_tdi_i, // from Boundary Scan Chain
                 mbist_tdi_i,    // from Mbist Chain
                 dtmcs_tdi_i,
-                dmi_tdi_i
+                dmi_tdi_i,
+
+		idcode_i	// configurable IDCODE value
               );
 
 
@@ -163,6 +165,8 @@ input   bs_chain_tdi_i; // from Boundary Scan Chain
 input   mbist_tdi_i;    // from Mbist Chain
 input   dtmcs_tdi_i;
 input   dmi_tdi_i;
+
+input [31:0]  idcode_i;
 
 // Registers
 reg     test_logic_reset;
@@ -504,7 +508,7 @@ begin
   if(idcode_select & shift_dr)
     idcode_reg <= {tdi_pad_i, idcode_reg[31:1]};
   else
-    idcode_reg <= `IDCODE_VALUE;
+    idcode_reg <= idcode_i;
 end
 
 always @ (negedge tck_pad_i)

@@ -484,6 +484,9 @@ always_comb begin
                             resp_op_o = 0;
                             resp_valid_o = 1;
                         end
+                    end else begin
+                        resp_op_o = 0;
+                        resp_valid_o = 1;
                     end
                 end
                 riscv_dm_pkg::ABSTRACTAUTO: begin
