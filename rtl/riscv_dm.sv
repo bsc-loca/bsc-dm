@@ -464,7 +464,7 @@ always_comb begin
                 end
                 riscv_dm_pkg::COMMAND: begin
                     if (abstractcs.cmderr == 3'b0) begin    // only allow executing a command if there wasn't a previous error
-                        if (halted_i[hartsel]) begin
+                        if (halted_i[hartsel] & ~unavail_i[hartsel]) begin
                             if (command_i.cmdtype == 8'd0) begin
                                 if ((command_i.control.regno >= 16'h1000) && (command_i.control.regno <= 16'h101f)) begin
                                     abstract_cmd = 1'b1;
