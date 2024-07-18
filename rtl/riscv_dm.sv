@@ -651,11 +651,7 @@ assign buf_addr = sri_addr_i[BYTE_SEL_BITS+:MEMORY_SEL_BITS];
 assign sri_error_o = 1'b0;
 always_comb begin
     if (sri_en_i) begin
-        if (buf_addr > (DATABUF_END >> BYTE_SEL_BITS)) begin
-            sri_rdata_o = {riscv_dm_pkg::EBREAK, riscv_dm_pkg::EBREAK}; // ebreak
-        end else begin
-            sri_rdata_o = {prog_data_buf[buf_addr+1], prog_data_buf[buf_addr]};
-        end
+        sri_rdata_o = {prog_data_buf[buf_addr+1], prog_data_buf[buf_addr]};
     end else begin
         sri_rdata_o = '0;
     end
