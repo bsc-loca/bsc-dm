@@ -157,7 +157,7 @@ end
 
 // ===== DMI register management =====
 
-always_ff @( posedge tck_i or posedge trst_i or posedge dtmcs_hard_reset) begin
+always_ff @( posedge tck_i or posedge trst_i) begin
     if(trst_i) begin
         dmi_state <= DMI_IDLE;
         dmi_op_out <= 0;
