@@ -122,7 +122,7 @@ module riscv_dm_wrapper #(
     ) req_cdc (
         .src_rst_ni             (~trst_i),
         .src_clk_i              (tck_i),
-        .src_clear_i            (0),
+        .src_clear_i            ('0),
         .src_clear_pending_o    (),
         .src_data_i             ({req_addr, req_data, req_op}),
         .src_valid_i            (req_valid),
@@ -130,7 +130,7 @@ module riscv_dm_wrapper #(
 
         .dst_rst_ni             (rstn_i),
         .dst_clk_i              (clk_i),
-        .dst_clear_i            (0),
+        .dst_clear_i            ('0),
         .dst_clear_pending_o    (),
         .dst_data_o             ({req_addr_cdc, req_data_cdc, req_op_cdc}),
         .dst_valid_o            (req_valid_cdc),
@@ -142,7 +142,7 @@ module riscv_dm_wrapper #(
     ) resp_cdc (
         .src_rst_ni             (rstn_i),
         .src_clk_i              (clk_i),
-        .src_clear_i            (0),
+        .src_clear_i            ('0),
         .src_clear_pending_o    (),
         .src_data_i             ({resp_data, resp_op}),
         .src_valid_i            (resp_valid),
@@ -150,7 +150,7 @@ module riscv_dm_wrapper #(
 
         .dst_rst_ni             (~trst_i),
         .dst_clk_i              (tck_i),
-        .dst_clear_i            (0),
+        .dst_clear_i            ('0),
         .dst_clear_pending_o    (),
         .dst_data_o             ({resp_data_cdc, resp_op_cdc}),
         .dst_valid_o            (resp_valid_cdc),
